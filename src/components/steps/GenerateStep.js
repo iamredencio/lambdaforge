@@ -1151,6 +1151,7 @@ If you encounter issues:
       { name: 'Analyzing infrastructure requirements', duration: 1200 },
       { name: 'Generating CloudFormation templates', duration: 1500 },
       { name: 'Creating deployment scripts', duration: 1000 },
+      { name: 'Creating resource cleanup scripts', duration: 800 },
       { name: 'Generating documentation', duration: 800 },
       { name: 'Validating template syntax', duration: 1000 },
       { name: 'Preparing deployment package', duration: 700 }
@@ -1178,7 +1179,12 @@ If you encounter issues:
           { name: 'Deployment Script', id: 'deploy.sh', status: 'generated', type: 'automation' }
         ]);
       }
-      if (i === 4) { // After documentation
+      if (i === 4) { // After generating cleanup script
+        setGeneratedResources(prev => [...prev, 
+          { name: 'Resource Cleanup Script', id: 'delete.sh', status: 'generated', type: 'automation' }
+        ]);
+      }
+      if (i === 5) { // After documentation
         setGeneratedResources(prev => [...prev, 
           { name: 'README Documentation', id: 'README.md', status: 'generated', type: 'documentation' }
         ]);
@@ -1189,6 +1195,7 @@ If you encounter issues:
     const files = {
       'template.yaml': generateCloudFormationTemplate(),
       'deploy.sh': generateDeploymentScript(),
+      'delete.sh': generateDeleteScript(),
       'README.md': generateReadme()
     };
     
