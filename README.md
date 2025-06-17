@@ -201,6 +201,66 @@ MIT License - see LICENSE file for details
 
 This project was built for an AWS hackathon focusing on innovative uses of AWS Lambda for infrastructure automation and management.
 
+## Deployment
+
+### Deploy LambdaForge to AWS
+
+You can deploy LambdaForge itself to AWS using the included deployment automation:
+
+#### Option 1: Using the UI
+1. Start the application locally
+2. Click the **"Deploy LambdaForge"** button in the AWS configuration step
+3. Fill in your AWS credentials
+4. Follow the deployment wizard
+
+#### Option 2: Using the Deployment Script
+```bash
+# Make sure you're in the project directory
+cd lambdaforge
+
+# Run the deployment script
+./deploy.sh
+
+# Or with custom parameters
+./deploy.sh -p my-lambdaforge -e Production -r us-west-2
+```
+
+#### Option 3: Manual CloudFormation Deployment
+```bash
+# Deploy the CloudFormation stack
+aws cloudformation deploy \
+  --template-file cloudformation/lambdaforge-template.yaml \
+  --stack-name lambdaforge-production-stack \
+  --parameter-overrides ProjectName=lambdaforge-production Environment=Production \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+
+# Build and upload the React app
+npm run build
+aws s3 sync build/ s3://your-bucket-name --delete
+
+# Invalidate CloudFront cache
+aws cloudfront create-invalidation --distribution-id YOUR_DISTRIBUTION_ID --paths "/*"
+```
+
+### Deployment Architecture
+
+When deployed to AWS, LambdaForge uses:
+
+- **S3 + CloudFront**: Static website hosting with global CDN
+- **Lambda + API Gateway**: Serverless API backend
+- **DynamoDB**: NoSQL database for application data
+- **CloudWatch**: Monitoring and logging
+- **WAF**: Web application firewall for security
+- **CodeBuild**: CI/CD pipeline for automated deployments
+
+### Estimated Costs
+
+- **Production**: $65-145/month
+- **Development**: $25-75/month
+
+See `DEPLOYMENT_GUIDE.md` for detailed cost breakdown and optimization strategies.
+
 ---
 
 **Built with ❤️ and AWS Lambda** 🚀 

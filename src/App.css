@@ -1,0 +1,65 @@
+.step-indicator {
+  @apply w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 shadow-md;
+}
+
+.step-indicator.active {
+  @apply bg-aws-smile text-white shadow-lg ring-4 ring-aws-smile ring-opacity-30;
+}
+
+.step-indicator.completed {
+  @apply bg-aws-success-500 text-white shadow-lg ring-4 ring-aws-success-500 ring-opacity-30;
+}
+
+.step-indicator.inactive {
+  @apply bg-white border-2 border-aws-gray-300 shadow-sm;
+  color: #475467 !important;
+  font-weight: 700 !important;
+}
+
+/* AWS Color System - Proper contrast ratios */
+.text-aws-gray-800 {
+  color: #1d2939 !important;
+  font-weight: 600 !important;
+}
+
+.text-aws-gray-700 {
+  color: #344054 !important;
+  font-weight: 600 !important;
+}
+
+.text-aws-gray-600 {
+  color: #475467 !important;
+  font-weight: 500 !important;
+}
+
+.text-aws-smile {
+  color: #ff9900 !important;
+  font-weight: 600 !important;
+}
+
+.text-aws-success-600 {
+  color: #16a34a !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure proper contrast on light backgrounds */
+.bg-white .text-aws-gray-600 {
+  color: #475467 !important;
+}
+
+.bg-white .text-aws-gray-700 {
+  color: #344054 !important;
+}
+
+.bg-white .text-aws-gray-800 {
+  color: #1d2939 !important;
+}
+
+/* Header text on dark background */
+.bg-aws-squid .text-white {
+  color: #ffffff !important;
+}
+
+.bg-aws-squid .text-aws-gray-300 {
+  color: #d0d5dd !important;
+} 

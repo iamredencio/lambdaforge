@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .step-indicator {
+    @apply flex items-center justify-center w-8 h-8 text-sm font-medium rounded-full transition-all duration-200;
+  }
+  
+  .step-indicator.active {
+    @apply bg-aws-orange text-white;
+  }
+  
+  .step-indicator.completed {
+    @apply bg-green-600 text-white;
+  }
+  
+  .step-indicator.inactive {
+    @apply bg-aws-gray-300 text-aws-gray-600;
+  }
+  
+  .form-input {
+    @apply w-full px-3 py-2 border border-aws-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-aws-orange focus:border-aws-orange transition-all duration-200;
+  }
+  
+  .form-select {
+    @apply w-full px-3 py-2 border border-aws-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-aws-orange focus:border-aws-orange transition-all duration-200;
+  }
+  
+  .btn-primary {
+    @apply bg-aws-orange text-white px-6 py-3 rounded-lg font-medium hover:bg-aws-orange-dark transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+  
+  .btn-secondary {
+    @apply bg-white border border-aws-gray-300 text-aws-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-aws-gray-50 transition-all duration-200 shadow-sm;
+  }
+  
+  .service-card {
+    @apply bg-white border border-aws-gray-200 rounded-lg p-6 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-aws-orange;
+  }
+  
+  .service-card.selected {
+    @apply border-aws-orange bg-aws-orange bg-opacity-5 shadow-md;
+  }
+} 
