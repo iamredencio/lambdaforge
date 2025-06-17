@@ -314,23 +314,38 @@ ${generateOutputsYAML()}`;
 
     // Infrastructure Resources
     if (formData.selectedInfrastructure?.includes('s3-bucket')) {
-      yamlResources += `  # S3 Bucket with versioning and security
+      yamlResources += `  # S3 Bucket with versioning and static website hosting
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '\${ProjectName}-storage-\${AWS::AccountId}-\${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
+
+  # S3 Bucket Policy for static website hosting
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '\${S3Bucket}/*'
 
 `;
     }
@@ -516,6 +531,11 @@ ${generateOutputsYAML()}`;
   S3BucketConsoleLink:
     Description: S3 Bucket Console Link
     Value: !Sub 'https://\${AWS::Region}.console.aws.amazon.com/s3/buckets/\${S3Bucket}'
+  S3WebsiteURL:
+    Description: S3 Static Website URL
+    Value: !Sub 'http://\${S3Bucket}.s3-website-\${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '\${ProjectName}-website-url'
 
 `;
     }
@@ -703,8 +723,15 @@ main() {
     echo ""
     
     check_prerequisites
+    check_web_app_config
     deploy_stack
     get_outputs
+    
+    # Deploy web application if specified
+    if [ -n "\$WEB_APP_LOCAL_PATH" ] || [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        build_web_app
+        deploy_web_app
+    fi
     
     print_success "Deployment completed successfully! 🎉"
 }
@@ -733,6 +760,13 @@ if [ -z "\$AWS_REGION" ]; then
     AWS_REGION="us-east-1"
 fi
 STACK_NAME="\${PROJECT_NAME}-stack"
+
+# Web Application Deployment Configuration
+# Set one of these to deploy the actual web application:
+# WEB_APP_LOCAL_PATH="/path/to/your/web/app"          # Local folder path
+# WEB_APP_GITHUB_REPO="https://github.com/user/repo" # GitHub repository URL
+WEB_APP_LOCAL_PATH=""
+WEB_APP_GITHUB_REPO=""
 
 # Colors for output
 RED='\\033[0;31m'
@@ -775,6 +809,121 @@ check_prerequisites() {
     fi
     
     print_success "Prerequisites check passed"
+}
+
+# Check web application configuration
+check_web_app_config() {
+    if [ -n "\$WEB_APP_LOCAL_PATH" ] && [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        print_error "Cannot specify both local path and GitHub repo. Choose one."
+        exit 1
+    fi
+    
+    if [ -n "\$WEB_APP_LOCAL_PATH" ]; then
+        if [ ! -d "\$WEB_APP_LOCAL_PATH" ]; then
+            print_error "Local web app path does not exist: \$WEB_APP_LOCAL_PATH"
+            exit 1
+        fi
+        print_status "Web app source: Local folder (\$WEB_APP_LOCAL_PATH)"
+    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        print_status "Web app source: GitHub repository (\$WEB_APP_GITHUB_REPO)"
+    else
+        print_warning "No web app source specified. Only AWS infrastructure will be created."
+        print_status "To deploy a web app, set WEB_APP_LOCAL_PATH or WEB_APP_GITHUB_REPO in this script."
+    fi
+}
+
+# Build and package web application
+build_web_app() {
+    if [ -z "\$WEB_APP_LOCAL_PATH" ] && [ -z "\$WEB_APP_GITHUB_REPO" ]; then
+        print_status "Skipping web app build - no source specified"
+        return 0
+    fi
+    
+    print_status "Building web application..."
+    
+    # Create temporary build directory
+    BUILD_DIR="\$(mktemp -d)"
+    print_status "Using build directory: \$BUILD_DIR"
+    
+    if [ -n "\$WEB_APP_LOCAL_PATH" ]; then
+        # Copy from local path
+        print_status "Copying from local path..."
+        cp -r "\$WEB_APP_LOCAL_PATH"/* "\$BUILD_DIR/"
+    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        # Clone from GitHub
+        print_status "Cloning from GitHub..."
+        git clone "\$WEB_APP_GITHUB_REPO" "\$BUILD_DIR"
+    fi
+    
+    # Build the application
+    cd "\$BUILD_DIR"
+    
+    if [ -f "package.json" ]; then
+        print_status "Installing dependencies..."
+        npm install
+        
+        print_status "Building application..."
+        npm run build
+        
+        if [ -d "build" ]; then
+            BUILT_APP_PATH="\$BUILD_DIR/build"
+        elif [ -d "dist" ]; then
+            BUILT_APP_PATH="\$BUILD_DIR/dist"
+        else
+            print_error "Build directory not found. Expected 'build' or 'dist' folder."
+            exit 1
+        fi
+    else
+        print_status "No package.json found, assuming static files"
+        BUILT_APP_PATH="\$BUILD_DIR"
+    fi
+    
+    print_success "Web application built successfully"
+    echo "Built app location: \$BUILT_APP_PATH"
+}
+
+# Deploy web application to S3
+deploy_web_app() {
+    if [ -z "\$BUILT_APP_PATH" ]; then
+        print_status "Skipping web app deployment - no built app"
+        return 0
+    fi
+    
+    print_status "Deploying web application to S3..."
+    
+    # Get S3 bucket name from CloudFormation outputs
+    S3_BUCKET=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`S3BucketName\`].OutputValue' \\
+        --output text)
+    
+    if [ -z "\$S3_BUCKET" ] || [ "\$S3_BUCKET" = "None" ]; then
+        print_warning "No S3 bucket found in stack outputs. Skipping web app deployment."
+        return 0
+    fi
+    
+    print_status "Uploading to S3 bucket: \$S3_BUCKET"
+    
+    # Upload files to S3
+    aws s3 sync "\$BUILT_APP_PATH" "s3://\$S3_BUCKET" \\
+        --region "\$AWS_REGION" \\
+        --delete
+    
+    # Configure S3 for static website hosting
+    aws s3 website "s3://\$S3_BUCKET" \\
+        --index-document index.html \\
+        --error-document error.html \\
+        --region "\$AWS_REGION"
+    
+    # Get website URL
+    WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    
+    print_success "Web application deployed successfully!"
+    echo ""
+    print_success "🌐 Your web application is available at:"
+    echo "   \$WEBSITE_URL"
+    echo ""
 }
 
 # Check if stack exists
@@ -978,9 +1127,45 @@ chmod +x delete.sh
 aws sts get-caller-identity
 aws configure get region
 
-# 4. Run deployment
+# 4. (Optional) Configure web application deployment
+# Edit deploy.sh and set either:
+# WEB_APP_LOCAL_PATH="/path/to/your/web/app"          # For local folder
+# WEB_APP_GITHUB_REPO="https://github.com/user/repo" # For GitHub repo
+
+# 5. Run deployment
 ./deploy.sh
 \`\`\`
+
+### Web Application Deployment Options
+
+#### Option 1: Deploy from Local Folder
+\`\`\`bash
+# Edit deploy.sh and set:
+WEB_APP_LOCAL_PATH="/path/to/your/react/app"
+\`\`\`
+
+#### Option 2: Deploy from GitHub Repository
+\`\`\`bash
+# Edit deploy.sh and set:
+WEB_APP_GITHUB_REPO="https://github.com/yourusername/your-repo"
+\`\`\`
+
+#### Option 3: Infrastructure Only (Default)
+If neither path is set, only AWS infrastructure will be created without deploying a web application.
+
+### Example: Deploy LambdaForge Application
+
+To deploy the LambdaForge application itself:
+
+\`\`\`bash
+# From GitHub (public repository):
+WEB_APP_GITHUB_REPO="https://github.com/your-username/lambdaforge"
+
+# Or from local development:
+WEB_APP_LOCAL_PATH="/Users/yourusername/Documents/lambdaforge"
+\`\`\`
+
+After deployment, your LambdaForge app will be available at the S3 website URL provided in the outputs.
 
 ### Cleanup (Delete All Resources)
 
