@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+cd aw AWSTemplateFormatVersion: '2010-09-09'
 Description: 'LambdaForge - React Application Deployment with Serverless Backend'
 
 Parameters:

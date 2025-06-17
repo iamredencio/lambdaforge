@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Minimal test template'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: lambdaforge-test
+
+Resources:
+  # Simple S3 Bucket
+  TestBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-test-${AWS::AccountId}-${AWS::Region}'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  BucketName:
+    Description: Test Bucket Name
+    Value: !Ref TestBucket 
