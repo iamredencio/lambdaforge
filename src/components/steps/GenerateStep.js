@@ -79,234 +79,7 @@ ${generateOutputsYAML()}`;
     return yamlTemplate;
   };
 
-  const generateResources = () => {
-    const resources = {};
 
-    // Infrastructure Resources
-    if (formData.selectedInfrastructure?.includes('s3-bucket')) {
-      resources.S3Bucket = {
-        Type: 'AWS::S3::Bucket',
-        Properties: {
-          BucketName: { 'Fn::Sub': '${ProjectName}-storage-${AWS::AccountId}' },
-          VersioningConfiguration: { Status: 'Enabled' },
-          PublicAccessBlockConfiguration: {
-            BlockPublicAcls: true,
-            BlockPublicPolicy: true,
-            IgnorePublicAcls: true,
-            RestrictPublicBuckets: true
-          },
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-    }
-
-    if (formData.selectedInfrastructure?.includes('dynamodb')) {
-      resources.DynamoDBTable = {
-        Type: 'AWS::DynamoDB::Table',
-        Properties: {
-          TableName: { 'Fn::Sub': '${ProjectName}-data' },
-          AttributeDefinitions: [
-            { AttributeName: 'id', AttributeType: 'S' }
-          ],
-          KeySchema: [
-            { AttributeName: 'id', KeyType: 'HASH' }
-          ],
-          BillingMode: 'PAY_PER_REQUEST',
-          PointInTimeRecoverySpecification: {
-            PointInTimeRecoveryEnabled: true
-          },
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-    }
-
-    // Compute Resources
-    if (formData.selectedCompute?.includes('lambda-functions')) {
-      resources.LambdaExecutionRole = {
-        Type: 'AWS::IAM::Role',
-        Properties: {
-          RoleName: { 'Fn::Sub': '${ProjectName}-lambda-role' },
-          AssumeRolePolicyDocument: {
-            Version: '2012-10-17',
-            Statement: [{
-              Effect: 'Allow',
-              Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole'
-            }]
-          },
-          ManagedPolicyArns: [
-            'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-          ],
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-
-      resources.LambdaFunction = {
-        Type: 'AWS::Lambda::Function',
-        Properties: {
-          FunctionName: { 'Fn::Sub': '${ProjectName}-function' },
-          Runtime: 'nodejs18.x',
-          Handler: 'index.handler',
-          Role: { 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] },
-          Code: {
-            ZipFile: `exports.handler = async (event) => {
-    console.log('Event:', JSON.stringify(event, null, 2));
-    
-    const response = {
-        statusCode: 200,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-            message: 'Hello from ${formData.projectName || 'LambdaForge'}!',
-            timestamp: new Date().toISOString(),
-            environment: '${formData.environment || 'Development'}'
-        })
-    };
-    
-    return response;
-};`
-          },
-          Environment: {
-            Variables: {
-              PROJECT_NAME: { Ref: 'ProjectName' },
-              ENVIRONMENT: { Ref: 'Environment' }
-            }
-          },
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-    }
-
-    // Integration Resources
-    if (formData.selectedIntegration?.includes('api-gateway')) {
-      resources.ApiGateway = {
-        Type: 'AWS::ApiGateway::RestApi',
-        Properties: {
-          Name: { 'Fn::Sub': '${ProjectName}-api' },
-          Description: `API for ${formData.projectName || 'LambdaForge Project'}`,
-          EndpointConfiguration: {
-            Types: ['REGIONAL']
-          },
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-
-      if (formData.selectedCompute?.includes('lambda-functions')) {
-        resources.ApiGatewayResource = {
-          Type: 'AWS::ApiGateway::Resource',
-          Properties: {
-            RestApiId: { Ref: 'ApiGateway' },
-            ParentId: { 'Fn::GetAtt': ['ApiGateway', 'RootResourceId'] },
-            PathPart: 'api'
-          }
-        };
-
-        resources.ApiGatewayMethod = {
-          Type: 'AWS::ApiGateway::Method',
-          Properties: {
-            RestApiId: { Ref: 'ApiGateway' },
-            ResourceId: { Ref: 'ApiGatewayResource' },
-            HttpMethod: 'ANY',
-            AuthorizationType: 'NONE',
-            Integration: {
-              Type: 'AWS_PROXY',
-              IntegrationHttpMethod: 'POST',
-              Uri: {
-                'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
-              }
-            }
-          }
-        };
-
-        resources.ApiGatewayDeployment = {
-          Type: 'AWS::ApiGateway::Deployment',
-          DependsOn: ['ApiGatewayMethod'],
-          Properties: {
-            RestApiId: { Ref: 'ApiGateway' },
-            StageName: { Ref: 'Environment' }
-          }
-        };
-
-        resources.LambdaApiGatewayPermission = {
-          Type: 'AWS::Lambda::Permission',
-          Properties: {
-            FunctionName: { Ref: 'LambdaFunction' },
-            Action: 'lambda:InvokeFunction',
-            Principal: 'apigateway.amazonaws.com',
-            SourceArn: {
-              'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${Environment}/*/*'
-            }
-          }
-        };
-      }
-    }
-
-    // Monitoring Resources
-    if (formData.selectedMonitoring?.includes('cloudwatch')) {
-      resources.LogGroup = {
-        Type: 'AWS::Logs::LogGroup',
-        Properties: {
-          LogGroupName: { 'Fn::Sub': '/aws/lambda/${ProjectName}-logs' },
-          RetentionInDays: 14,
-          Tags: [
-            { Key: 'Project', Value: { Ref: 'ProjectName' } },
-            { Key: 'Environment', Value: { Ref: 'Environment' } }
-          ]
-        }
-      };
-    }
-
-    return resources;
-  };
-
-  const generateOutputs = () => {
-    const outputs = {};
-
-    if (formData.selectedInfrastructure?.includes('s3-bucket')) {
-      outputs.S3BucketName = {
-        Description: 'S3 Bucket Name',
-        Value: { Ref: 'S3Bucket' },
-        Export: { Name: { 'Fn::Sub': '${ProjectName}-s3-bucket' } }
-      };
-    }
-
-    if (formData.selectedCompute?.includes('lambda-functions')) {
-      outputs.LambdaFunctionArn = {
-        Description: 'Lambda Function ARN',
-        Value: { 'Fn::GetAtt': ['LambdaFunction', 'Arn'] },
-        Export: { Name: { 'Fn::Sub': '${ProjectName}-lambda-arn' } }
-      };
-    }
-
-    if (formData.selectedIntegration?.includes('api-gateway')) {
-      outputs.ApiEndpoint = {
-        Description: 'API Gateway endpoint URL',
-        Value: {
-          'Fn::Sub': 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
-        },
-        Export: { Name: { 'Fn::Sub': '${ProjectName}-api-endpoint' } }
-      };
-    }
-
-    return outputs;
-  };
 
   // YAML generation functions for proper CloudFormation format
   const generateResourcesYAML = () => {
@@ -318,7 +91,7 @@ ${generateOutputsYAML()}`;
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '\${ProjectName}-storage-\${AWS::AccountId}-\${AWS::Region}'
+      BucketName: !Sub '\${ProjectName}-storage-\${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       WebsiteConfiguration:
@@ -605,6 +378,7 @@ ${generateOutputsYAML()}`;
     return yamlOutputs;
   };
 
+  /* eslint-disable no-useless-escape */
   const generateDeploymentScript = () => {
     const projectName = formData.projectName || 'lambdaforge-project';
     const environment = formData.environment || 'Development';
@@ -646,69 +420,282 @@ print_error() {
     echo -e "\${RED}[ERROR]\${NC} $1"
 }
 
+print_warning() {
+    echo -e "\${YELLOW}[WARNING]\${NC} $1"
+}
+
 # Check prerequisites
 check_prerequisites() {
     print_status "Checking prerequisites..."
     
+    # Check AWS CLI
     if ! command -v aws &> /dev/null; then
         print_error "AWS CLI is not installed. Please install it first."
         exit 1
     fi
     
+    # Check AWS credentials
     if ! aws sts get-caller-identity &> /dev/null; then
-        print_error "AWS credentials are not configured. Please run 'aws configure' first."
+        print_error "AWS credentials not configured. Run 'aws configure' first."
         exit 1
     fi
     
-    print_success "Prerequisites check passed."
+    print_success "Prerequisites check passed"
 }
 
-# Deploy CloudFormation stack
-deploy_stack() {
-    print_status "Deploying CloudFormation stack..."
+# Check web application configuration
+check_web_app_config() {
+    if [ -n "\$WEB_APP_LOCAL_PATH" ] && [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        print_error "Cannot specify both local path and GitHub repo. Choose one."
+        exit 1
+    fi
     
-    aws cloudformation deploy \\
-        --template-file template.yaml \\
-        --stack-name "\$STACK_NAME" \\
-        --parameter-overrides \\
-            ProjectName="\$PROJECT_NAME" \\
-            Environment="\$ENVIRONMENT" \\
-        --capabilities CAPABILITY_NAMED_IAM \\
-        --region "\$AWS_REGION" \\
-        --no-fail-on-empty-changeset
-    
-    if [ $? -eq 0 ]; then
-        print_success "Stack deployment completed successfully!"
+    if [ -n "\$WEB_APP_LOCAL_PATH" ]; then
+        if [ ! -d "\$WEB_APP_LOCAL_PATH" ]; then
+            print_error "Local web app path does not exist: \$WEB_APP_LOCAL_PATH"
+            exit 1
+        fi
+        print_status "Web app source: Local folder (\$WEB_APP_LOCAL_PATH)"
+    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        print_status "Web app source: GitHub repository (\$WEB_APP_GITHUB_REPO)"
     else
-        print_error "Stack deployment failed!"
+        print_warning "No web app source specified. Only AWS infrastructure will be created."
+        print_status "To deploy a web app, set WEB_APP_LOCAL_PATH or WEB_APP_GITHUB_REPO in this script."
+    fi
+}
+
+# Build and package web application
+build_web_app() {
+    if [ -z "\$WEB_APP_LOCAL_PATH" ] && [ -z "\$WEB_APP_GITHUB_REPO" ]; then
+        print_status "Skipping web app build - no source specified"
+        return 0
+    fi
+    
+    print_status "Building web application..."
+    
+    if [ -n "\$WEB_APP_LOCAL_PATH" ]; then
+        # Build from local path (in place)
+        print_status "Building from local path: \$WEB_APP_LOCAL_PATH"
+        
+        # Save current directory
+        ORIGINAL_DIR=\$(pwd)
+        
+        # Go to the local path and build there
+        cd "\$WEB_APP_LOCAL_PATH"
+        
+        if [ -f "package.json" ]; then
+            print_status "Installing dependencies..."
+            npm install
+            
+            print_status "Building application..."
+            npm run build
+            
+            if [ -d "build" ]; then
+                BUILT_APP_PATH="\$WEB_APP_LOCAL_PATH/build"
+            elif [ -d "dist" ]; then
+                BUILT_APP_PATH="\$WEB_APP_LOCAL_PATH/dist"
+            else
+                print_error "Build directory not found. Expected 'build' or 'dist' folder."
+                cd "\$ORIGINAL_DIR"
+                exit 1
+            fi
+        else
+            print_error "No package.json found in \$WEB_APP_LOCAL_PATH"
+            cd "\$ORIGINAL_DIR"
+            exit 1
+        fi
+        
+        # Return to original directory
+        cd "\$ORIGINAL_DIR"
+        
+    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        # Clone from GitHub to temporary directory
+        print_status "Cloning from GitHub repository: \$WEB_APP_GITHUB_REPO"
+        
+        BUILD_DIR="\$(mktemp -d)"
+        print_status "Using build directory: \$BUILD_DIR"
+        
+        git clone "\$WEB_APP_GITHUB_REPO" "\$BUILD_DIR"
+        cd "\$BUILD_DIR"
+        
+        if [ -f "package.json" ]; then
+            print_status "Installing dependencies..."
+            npm install
+            
+            print_status "Building application..."
+            npm run build
+            
+            if [ -d "build" ]; then
+                BUILT_APP_PATH="\$BUILD_DIR/build"
+            elif [ -d "dist" ]; then
+                BUILT_APP_PATH="\$BUILD_DIR/dist"
+            else
+                print_error "Build directory not found. Expected 'build' or 'dist' folder."
+                exit 1
+            fi
+        else
+            print_error "No package.json found in cloned repository"
+            exit 1
+        fi
+    fi
+    
+    print_success "Web application built successfully"
+    echo "Built app location: \$BUILT_APP_PATH"
+}
+
+# Deploy web application to S3
+deploy_web_app() {
+    if [ -z "\$BUILT_APP_PATH" ]; then
+        print_status "Skipping web app deployment - no built app"
+        return 0
+    fi
+    
+    print_status "Deploying web application to S3..."
+    
+    # Get S3 bucket name from CloudFormation outputs
+    S3_BUCKET=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`S3BucketName\`].OutputValue' \\
+        --output text)
+    
+    if [ -z "\$S3_BUCKET" ] || [ "\$S3_BUCKET" = "None" ]; then
+        print_warning "No S3 bucket found in stack outputs. Skipping web app deployment."
+        return 0
+    fi
+    
+    print_status "Uploading to S3 bucket: \$S3_BUCKET"
+    
+    # Upload files to S3
+    aws s3 sync "\$BUILT_APP_PATH" "s3://\$S3_BUCKET" \\
+        --region "\$AWS_REGION" \\
+        --delete
+    
+    # Configure S3 for static website hosting
+    aws s3 website "s3://\$S3_BUCKET" \\
+        --index-document index.html \\
+        --error-document error.html \\
+        --region "\$AWS_REGION"
+    
+    # Get website URL
+    WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    
+    print_success "Web application deployed successfully!"
+    echo ""
+    print_success "🌐 Your web application is available at:"
+    echo "   \$WEBSITE_URL"
+    echo ""
+}
+
+# Deploy or update the CloudFormation stack
+deploy_stack() {
+    print_status "Checking if stack exists..."
+    
+    if aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" &>/dev/null; then
+        print_status "Stack exists. Updating..."
+        OPERATION="update-stack"
+    else
+        print_status "Stack does not exist. Creating..."
+        OPERATION="create-stack"
+    fi
+    
+    print_status "Deploying CloudFormation stack..."
+    print_status "Stack Name: \$STACK_NAME"
+    print_status "Region: \$AWS_REGION"
+    print_status "Template: template.yaml"
+    
+    # Deploy the stack
+    aws cloudformation \$OPERATION \\
+        --stack-name "\$STACK_NAME" \\
+        --template-body file://template.yaml \\
+        --capabilities CAPABILITY_IAM \\
+        --region "\$AWS_REGION"
+    
+    if [ \$? -ne 0 ]; then
+        print_error "Failed to create/update the stack"
+        exit 1
+    fi
+    
+    print_status "Waiting for stack operation to complete..."
+    print_status "This may take several minutes..."
+    
+    # Wait for the operation to complete
+    if [ "\$OPERATION" = "create-stack" ]; then
+        WAIT_CONDITION="stack-create-complete"
+    else
+        WAIT_CONDITION="stack-update-complete"
+    fi
+    
+    if aws cloudformation wait \$WAIT_CONDITION --stack-name "\$STACK_NAME" --region "\$AWS_REGION"; then
+        print_success "Stack operation completed successfully! 🎉"
+    else
+        print_error "Stack operation failed or timed out"
+        print_status "Check the CloudFormation console for details:"
+        echo "https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks"
         exit 1
     fi
 }
 
-# Get stack outputs and show resource links
-get_outputs() {
-    print_status "Retrieving stack outputs..."
+# Show deployment results
+show_results() {
+    print_success "🎉 Deployment completed successfully!"
+    echo ""
+    print_status "📋 Resource Summary:"
     
+    # Get stack outputs
     aws cloudformation describe-stacks \\
         --stack-name "\$STACK_NAME" \\
         --region "\$AWS_REGION" \\
-        --query 'Stacks[0].Outputs' \\
+        --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \\
         --output table
     
     echo ""
-    print_success "🔗 Resource Access Links:"
-    echo ""
+    print_status "🔗 AWS Console Links:"
+    
+    # CloudFormation Console
     echo "📊 CloudFormation Stack:"
     echo "   https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks/stackinfo?stackId=\$STACK_NAME"
-    echo ""
     
-    # Get specific resource links from outputs
-    OUTPUTS=\$(aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" --query 'Stacks[0].Outputs' --output json)
+    # Get resource links
+    LAMBDA_FUNCTION=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`LambdaFunctionName\`].OutputValue' \\
+        --output text 2>/dev/null)
     
-    # Parse and display resource-specific links
-    if echo "\$OUTPUTS" | jq -e '.[] | select(.OutputKey | contains("ConsoleLink"))' > /dev/null 2>&1; then
-        echo "\$OUTPUTS" | jq -r '.[] | select(.OutputKey | contains("ConsoleLink")) | "🔗 " + .Description + ":\\n   " + .OutputValue + "\\n"'
+    API_GATEWAY=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`ApiGatewayUrl\`].OutputValue' \\
+        --output text 2>/dev/null)
+    
+    S3_BUCKET=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`S3BucketName\`].OutputValue' \\
+        --output text 2>/dev/null)
+    
+    if [ -n "\$LAMBDA_FUNCTION" ] && [ "\$LAMBDA_FUNCTION" != "None" ]; then
+        echo "⚡ Lambda Function:"
+        echo "   https://\$AWS_REGION.console.aws.amazon.com/lambda/home?region=\$AWS_REGION#/functions/\$LAMBDA_FUNCTION"
     fi
+    
+    if [ -n "\$API_GATEWAY" ] && [ "\$API_GATEWAY" != "None" ]; then
+        echo "🌐 API Gateway:"
+        echo "   \$API_GATEWAY"
+    fi
+    
+    if [ -n "\$S3_BUCKET" ] && [ "\$S3_BUCKET" != "None" ]; then
+        echo "🪣 S3 Bucket:"
+        echo "   https://s3.console.aws.amazon.com/s3/buckets/\$S3_BUCKET?region=\$AWS_REGION"
+    fi
+    
+    echo ""
+    print_status "💡 Next Steps:"
+    echo "  • Test your deployed resources using the links above"
+    echo "  • Monitor logs in CloudWatch"
+    echo "  • Use delete.sh to clean up resources when done"
+    echo ""
 }
 
 # Main deployment function
@@ -718,28 +705,26 @@ main() {
     echo "🚀 ${projectName} Deployment"
     echo "======================================"
     echo "Project: \$PROJECT_NAME"
-    echo "Environment: \$ENVIRONMENT"
     echo "Region: \$AWS_REGION"
     echo ""
     
     check_prerequisites
     check_web_app_config
+    build_web_app
     deploy_stack
-    get_outputs
-    
-    # Deploy web application if specified
-    if [ -n "\$WEB_APP_LOCAL_PATH" ] || [ -n "\$WEB_APP_GITHUB_REPO" ]; then
-        build_web_app
-        deploy_web_app
-    fi
-    
-    print_success "Deployment completed successfully! 🎉"
+    deploy_web_app
+    show_results
 }
 
-main "$@"
+# Run with error handling
+if [ "\${BASH_SOURCE[0]}" == "\${0}" ]; then
+    main "$@"
+fi
 `;
   };
+  /* eslint-enable no-useless-escape */
 
+  /* eslint-disable no-useless-escape */
   const generateDeleteScript = () => {
     const projectName = formData.projectName || 'lambdaforge-project';
 
@@ -841,41 +826,70 @@ build_web_app() {
     
     print_status "Building web application..."
     
-    # Create temporary build directory
-    BUILD_DIR="\$(mktemp -d)"
-    print_status "Using build directory: \$BUILD_DIR"
-    
     if [ -n "\$WEB_APP_LOCAL_PATH" ]; then
-        # Copy from local path
-        print_status "Copying from local path..."
-        cp -r "\$WEB_APP_LOCAL_PATH"/* "\$BUILD_DIR/"
-    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
-        # Clone from GitHub
-        print_status "Cloning from GitHub..."
-        git clone "\$WEB_APP_GITHUB_REPO" "\$BUILD_DIR"
-    fi
-    
-    # Build the application
-    cd "\$BUILD_DIR"
-    
-    if [ -f "package.json" ]; then
-        print_status "Installing dependencies..."
-        npm install
+        # Build from local path (in place)
+        print_status "Building from local path: \$WEB_APP_LOCAL_PATH"
         
-        print_status "Building application..."
-        npm run build
+        # Save current directory
+        ORIGINAL_DIR=\$(pwd)
         
-        if [ -d "build" ]; then
-            BUILT_APP_PATH="\$BUILD_DIR/build"
-        elif [ -d "dist" ]; then
-            BUILT_APP_PATH="\$BUILD_DIR/dist"
+        # Go to the local path and build there
+        cd "\$WEB_APP_LOCAL_PATH"
+        
+        if [ -f "package.json" ]; then
+            print_status "Installing dependencies..."
+            npm install
+            
+            print_status "Building application..."
+            npm run build
+            
+            if [ -d "build" ]; then
+                BUILT_APP_PATH="\$WEB_APP_LOCAL_PATH/build"
+            elif [ -d "dist" ]; then
+                BUILT_APP_PATH="\$WEB_APP_LOCAL_PATH/dist"
+            else
+                print_error "Build directory not found. Expected 'build' or 'dist' folder."
+                cd "\$ORIGINAL_DIR"
+                exit 1
+            fi
         else
-            print_error "Build directory not found. Expected 'build' or 'dist' folder."
+            print_error "No package.json found in \$WEB_APP_LOCAL_PATH"
+            cd "\$ORIGINAL_DIR"
             exit 1
         fi
-    else
-        print_status "No package.json found, assuming static files"
-        BUILT_APP_PATH="\$BUILD_DIR"
+        
+        # Return to original directory
+        cd "\$ORIGINAL_DIR"
+        
+    elif [ -n "\$WEB_APP_GITHUB_REPO" ]; then
+        # Clone from GitHub to temporary directory
+        print_status "Cloning from GitHub repository: \$WEB_APP_GITHUB_REPO"
+        
+        BUILD_DIR="\$(mktemp -d)"
+        print_status "Using build directory: \$BUILD_DIR"
+        
+        git clone "\$WEB_APP_GITHUB_REPO" "\$BUILD_DIR"
+        cd "\$BUILD_DIR"
+        
+        if [ -f "package.json" ]; then
+            print_status "Installing dependencies..."
+            npm install
+            
+            print_status "Building application..."
+            npm run build
+            
+            if [ -d "build" ]; then
+                BUILT_APP_PATH="\$BUILD_DIR/build"
+            elif [ -d "dist" ]; then
+                BUILT_APP_PATH="\$BUILD_DIR/dist"
+            else
+                print_error "Build directory not found. Expected 'build' or 'dist' folder."
+                exit 1
+            fi
+        else
+            print_error "No package.json found in cloned repository"
+            exit 1
+        fi
     fi
     
     print_success "Web application built successfully"
@@ -926,100 +940,133 @@ deploy_web_app() {
     echo ""
 }
 
-# Check if stack exists
-check_stack_exists() {
+# Deploy or update the CloudFormation stack
+deploy_stack() {
     print_status "Checking if stack exists..."
     
-    if aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" &> /dev/null; then
-        print_success "Stack '\$STACK_NAME' found in region \$AWS_REGION"
-        return 0
+    if aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" &>/dev/null; then
+        print_status "Stack exists. Updating..."
+        OPERATION="update-stack"
     else
-        print_warning "Stack '\$STACK_NAME' not found in region \$AWS_REGION"
-        return 1
+        print_status "Stack does not exist. Creating..."
+        OPERATION="create-stack"
     fi
-}
-
-# Get stack resources before deletion
-show_resources_to_delete() {
-    print_status "Resources that will be DELETED:"
-    echo ""
     
-    aws cloudformation list-stack-resources \\
+    print_status "Deploying CloudFormation stack..."
+    print_status "Stack Name: \$STACK_NAME"
+    print_status "Region: \$AWS_REGION"
+    print_status "Template: template.yaml"
+    
+    # Deploy the stack
+    aws cloudformation \$OPERATION \\
         --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION" \\
-        --query 'StackResourceSummaries[*].[ResourceType,LogicalResourceId,PhysicalResourceId]' \\
-        --output table
-    
-    echo ""
-}
-
-# Confirm deletion
-confirm_deletion() {
-    echo ""
-    print_warning "🚨 DANGER ZONE 🚨"
-    print_warning "This will PERMANENTLY DELETE all resources in the stack!"
-    print_warning "Stack: \$STACK_NAME"
-    print_warning "Region: \$AWS_REGION"
-    echo ""
-    
-    read -p "Are you absolutely sure you want to delete all resources? Type 'DELETE' to confirm: " confirmation
-    
-    if [ "\$confirmation" != "DELETE" ]; then
-        print_status "Deletion cancelled by user"
-        exit 0
-    fi
-}
-
-# Delete the stack
-delete_stack() {
-    print_status "Initiating stack deletion..."
-    
-    aws cloudformation delete-stack \\
-        --stack-name "\$STACK_NAME" \\
+        --template-body file://template.yaml \\
+        --capabilities CAPABILITY_IAM \\
         --region "\$AWS_REGION"
     
-    print_status "Waiting for stack deletion to complete..."
+    if [ \$? -ne 0 ]; then
+        print_error "Failed to create/update the stack"
+        exit 1
+    fi
+    
+    print_status "Waiting for stack operation to complete..."
     print_status "This may take several minutes..."
     
-    # Wait for deletion to complete
-    if aws cloudformation wait stack-delete-complete \\
-        --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION"; then
-        print_success "Stack deleted successfully! 🎉"
+    # Wait for the operation to complete
+    if [ "\$OPERATION" = "create-stack" ]; then
+        WAIT_CONDITION="stack-create-complete"
     else
-        print_error "Stack deletion failed or timed out"
+        WAIT_CONDITION="stack-update-complete"
+    fi
+    
+    if aws cloudformation wait \$WAIT_CONDITION --stack-name "\$STACK_NAME" --region "\$AWS_REGION"; then
+        print_success "Stack operation completed successfully! 🎉"
+    else
+        print_error "Stack operation failed or timed out"
         print_status "Check the CloudFormation console for details:"
         echo "https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks"
         exit 1
     fi
 }
 
-# Main deletion function
+# Show deployment results
+show_results() {
+    print_success "🎉 Deployment completed successfully!"
+    echo ""
+    print_status "📋 Resource Summary:"
+    
+    # Get stack outputs
+    aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \\
+        --output table
+    
+    echo ""
+    print_status "🔗 AWS Console Links:"
+    
+    # CloudFormation Console
+    echo "📊 CloudFormation Stack:"
+    echo "   https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks/stackinfo?stackId=\$STACK_NAME"
+    
+    # Get resource links
+    LAMBDA_FUNCTION=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`LambdaFunctionName\`].OutputValue' \\
+        --output text 2>/dev/null)
+    
+    API_GATEWAY=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`ApiGatewayUrl\`].OutputValue' \\
+        --output text 2>/dev/null)
+    
+    S3_BUCKET=\$(aws cloudformation describe-stacks \\
+        --stack-name "\$STACK_NAME" \\
+        --region "\$AWS_REGION" \\
+        --query 'Stacks[0].Outputs[?OutputKey==\`S3BucketName\`].OutputValue' \\
+        --output text 2>/dev/null)
+    
+    if [ -n "\$LAMBDA_FUNCTION" ] && [ "\$LAMBDA_FUNCTION" != "None" ]; then
+        echo "⚡ Lambda Function:"
+        echo "   https://\$AWS_REGION.console.aws.amazon.com/lambda/home?region=\$AWS_REGION#/functions/\$LAMBDA_FUNCTION"
+    fi
+    
+    if [ -n "\$API_GATEWAY" ] && [ "\$API_GATEWAY" != "None" ]; then
+        echo "🌐 API Gateway:"
+        echo "   \$API_GATEWAY"
+    fi
+    
+    if [ -n "\$S3_BUCKET" ] && [ "\$S3_BUCKET" != "None" ]; then
+        echo "🪣 S3 Bucket:"
+        echo "   https://s3.console.aws.amazon.com/s3/buckets/\$S3_BUCKET?region=\$AWS_REGION"
+    fi
+    
+    echo ""
+    print_status "💡 Next Steps:"
+    echo "  • Test your deployed resources using the links above"
+    echo "  • Monitor logs in CloudWatch"
+    echo "  • Use delete.sh to clean up resources when done"
+    echo ""
+}
+
+# Main deployment function
 main() {
     echo ""
     echo "======================================"
-    echo "🗑️  ${projectName} Resource Cleanup"
+    echo "🚀 ${projectName} Deployment"
     echo "======================================"
     echo "Project: \$PROJECT_NAME"
     echo "Region: \$AWS_REGION"
     echo ""
     
     check_prerequisites
-    
-    if check_stack_exists; then
-        show_resources_to_delete
-        confirm_deletion
-        delete_stack
-        
-        print_success "All resources have been successfully deleted! 🎉"
-        echo ""
-        print_status "💡 Summary:"
-        echo "  • Stack '\$STACK_NAME' has been deleted"
-        echo "  • All associated AWS resources have been removed"
-        echo "  • No further charges will be incurred for these resources"
-    else
-        print_status "No resources to delete. Stack does not exist."
-    fi
+    check_web_app_config
+    build_web_app
+    deploy_stack
+    deploy_web_app
+    show_results
 }
 
 # Run with error handling
@@ -1028,6 +1075,7 @@ if [ "\${BASH_SOURCE[0]}" == "\${0}" ]; then
 fi
 `;
   };
+  /* eslint-enable no-useless-escape */
 
   const generateReadme = () => {
     const projectName = formData.projectName || 'LambdaForge Project';
@@ -1255,17 +1303,7 @@ If you encounter issues:
 `;
   };
 
-  // Download single file
-  const downloadFile = (filename, content) => {
-    const element = document.createElement('a');
-    const file = new Blob([content], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = filename;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    URL.revokeObjectURL(element.href);
-  };
+
 
   // Create and download zip file
   const downloadZipFile = async (files, projectName) => {
