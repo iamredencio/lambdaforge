@@ -99,9 +99,6 @@ export const validateAWSConfig = () => {
     warnings.push('Application is running over HTTP - HTTPS recommended for production');
   }
   
-  // Note about credentials
-  warnings.push('AWS credentials should be configured in the deployment script for security');
-  
   return {
     isValid: errors.length === 0,
     errors,

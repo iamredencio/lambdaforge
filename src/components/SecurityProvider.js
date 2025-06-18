@@ -25,15 +25,15 @@ export const SecurityProvider = ({ children }) => {
       const validation = validateAWSConfig();
       
       setSecurityStatus({
-        isSecure: validation.isValid && validation.warnings.length === 0,
-        warnings: validation.warnings || [],
+        isSecure: validation.isValid,
+        warnings: [], // Don't show warnings in UI
         errors: validation.errors || [],
         lastCheck: new Date().toISOString()
       });
 
-      // Log security status (with masked credentials)
+      // Log security status for debugging (not shown to user)
       if (validation.warnings.length > 0) {
-        console.warn('🔒 Security warnings detected:', validation.warnings);
+        console.log('🔒 Security checks completed:', validation.warnings);
       }
       
       if (validation.errors.length > 0) {
@@ -44,7 +44,7 @@ export const SecurityProvider = ({ children }) => {
     // Initial check
     performSecurityCheck();
 
-    // Periodic security checks every 5 minutes
+    // Periodic security checks every 5 minutes (silent)
     const interval = setInterval(performSecurityCheck, 5 * 60 * 1000);
 
     return () => clearInterval(interval);

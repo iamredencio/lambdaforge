@@ -5,7 +5,6 @@ import StepIndicator from './components/StepIndicator';
 import Marketplace from './components/Marketplace';
 import AIArchitectureSuggestions from './components/AIArchitectureSuggestions';
 import SecurityProvider from './components/SecurityProvider';
-import SecurityWarning from './components/SecurityWarning';
 import AWSRequiredStep from './components/steps/AWSRequiredStep';
 import InfrastructureStep from './components/steps/InfrastructureStep';
 import ComputeStep from './components/steps/ComputeStep';
@@ -191,102 +190,103 @@ function AppContent() {
   const CurrentStepComponent = steps[currentStep - 1].component;
 
   return (
-    <div className="min-h-screen bg-aws-gray-25">
-      <Header 
-        onMarketplaceOpen={() => setIsMarketplaceOpen(true)}
-        onReset={resetAllData}
-        onHomeClick={goToHome}
-      />
-        <Marketplace 
-          isOpen={isMarketplaceOpen}
-          onClose={() => setIsMarketplaceOpen(false)}
-          onSelectPackage={handleMarketplaceSelect}
-        />
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <StepIndicator steps={steps} currentStep={currentStep} />
-          
-          {/* Security Warning - Show on all steps */}
-          <SecurityWarning />
-          
-          {/* AI Suggestions - Show after step 2 */}
-          {currentStep > 2 && (
-            <AIArchitectureSuggestions 
-              formData={formData}
-              onApplySuggestion={handleAISuggestion}
-            />
-          )}
-          
-          {/* Environment Management Panel - Show on Generate step */}
-          {currentStep === 9 && (
-            <div className="bg-white border border-aws-gray-200 rounded-lg p-6 mb-6 shadow-card">
-              <h3 className="text-lg font-bold text-aws-gray-800 mb-4 flex items-center">
-                🌍 Environment Management
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {environments.map((env) => (
-                  <div 
-                    key={env.id}
-                    className={`border rounded-lg p-4 cursor-pointer transition-all duration-200 ${
-                      activeEnvironment === env.id 
-                        ? 'border-aws-smile bg-aws-orange-pale shadow-md' 
-                        : 'border-aws-gray-200 hover:border-aws-gray-300 hover:shadow-sm'
-                    }`}
-                    onClick={() => setActiveEnvironment(env.id)}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-bold text-aws-gray-800">{env.name}</h4>
-                      <span className={`px-2 py-1 text-xs font-medium rounded ${
-                        env.status === 'active' ? 'bg-aws-success-50 text-aws-success-700' :
-                        env.status === 'deploying' ? 'bg-aws-warning-50 text-aws-warning-700' :
-                        'bg-aws-gray-100 text-aws-gray-600'
-                      }`}>
-                        {env.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-aws-gray-600 font-medium">
-                      Cost: ${env.cost}/month
-                    </div>
-                    {env.status === 'inactive' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          createEnvironment(env.name.toLowerCase());
-                        }}
-                        className="mt-2 w-full px-3 py-1 bg-aws-smile text-white text-xs font-bold rounded hover:bg-aws-orange-dark transition-colors duration-200 shadow-sm"
-                      >
-                        Deploy to {env.name}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="bg-white border border-aws-gray-200 rounded-lg shadow-card p-8">
-            <Routes>
-              <Route path="/" element={<Navigate to="/step/1" replace />} />
-              <Route 
-                path="/step/:stepId" 
-                element={
-                  <CurrentStepComponent
-                    formData={formData}
-                    updateFormData={updateFormData}
-                    nextStep={nextStep}
-                    prevStep={prevStep}
-                    currentStep={currentStep}
-                    totalSteps={steps.length}
-                    environments={environments}
-                    activeEnvironment={activeEnvironment}
-                    onCreateEnvironment={createEnvironment}
-                  />
-                } 
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <Header 
+            onMarketplaceOpen={() => setIsMarketplaceOpen(true)}
+            onReset={resetAllData}
+            onHomeClick={goToHome}
+          />
+          <Marketplace 
+            isOpen={isMarketplaceOpen}
+            onClose={() => setIsMarketplaceOpen(false)}
+            onSelectPackage={handleMarketplaceSelect}
+          />
+          <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <StepIndicator steps={steps} currentStep={currentStep} />
+            
+            {/* AI Suggestions - Show after step 2 */}
+            {currentStep > 2 && (
+              <AIArchitectureSuggestions 
+                formData={formData}
+                onApplySuggestion={handleAISuggestion}
               />
-            </Routes>
+            )}
+            
+            {/* Environment Management Panel - Show on Generate step */}
+            {currentStep === 9 && (
+              <div className="bg-white border border-aws-gray-200 rounded-lg p-6 mb-6 shadow-card">
+                <h3 className="text-lg font-bold text-aws-gray-800 mb-4 flex items-center">
+                  🌍 Environment Management
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {environments.map((env) => (
+                    <div 
+                      key={env.id}
+                      className={`border rounded-lg p-4 cursor-pointer transition-all duration-200 ${
+                        activeEnvironment === env.id 
+                          ? 'border-aws-smile bg-aws-orange-pale shadow-md' 
+                          : 'border-aws-gray-200 hover:border-aws-gray-300 hover:shadow-sm'
+                      }`}
+                      onClick={() => setActiveEnvironment(env.id)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold text-aws-gray-800">{env.name}</h4>
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${
+                          env.status === 'active' ? 'bg-aws-success-50 text-aws-success-700' :
+                          env.status === 'deploying' ? 'bg-aws-warning-50 text-aws-warning-700' :
+                          'bg-aws-gray-100 text-aws-gray-600'
+                        }`}>
+                          {env.status}
+                        </span>
+                      </div>
+                      <div className="text-sm text-aws-gray-600 font-medium">
+                        Cost: ${env.cost}/month
+                      </div>
+                      {env.status === 'inactive' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            createEnvironment(env.name.toLowerCase());
+                          }}
+                          className="mt-2 w-full px-3 py-1 bg-aws-smile text-white text-xs font-bold rounded hover:bg-aws-orange-dark transition-colors duration-200 shadow-sm"
+                        >
+                          Deploy to {env.name}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="bg-white border border-aws-gray-200 rounded-lg shadow-card p-8">
+              <Routes>
+                <Route path="/" element={<Navigate to="/step/1" replace />} />
+                <Route 
+                  path="/step/:stepId" 
+                  element={
+                    <CurrentStepComponent
+                      formData={formData}
+                      updateFormData={updateFormData}
+                      nextStep={nextStep}
+                      prevStep={prevStep}
+                      currentStep={currentStep}
+                      totalSteps={steps.length}
+                      environments={environments}
+                      activeEnvironment={activeEnvironment}
+                      onCreateEnvironment={createEnvironment}
+                    />
+                  } 
+                />
+              </Routes>
+            </div>
           </div>
         </div>
       </div>
-    );
+    </div>
+  );
 }
 
 function App() {
