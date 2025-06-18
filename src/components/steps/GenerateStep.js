@@ -403,10 +403,27 @@ STACK_NAME="\${PROJECT_NAME}-stack"
 # Use template_no_iam.yaml for limited permissions, template.yaml for full permissions
 TEMPLATE_FILE="template_no_iam.yaml"
 
-# Web Application Configuration
-# Set one of the following to deploy a web application:
-# WEB_APP_LOCAL_PATH="/path/to/your/web/app"  # Deploy from local folder
-# WEB_APP_GITHUB_REPO="https://github.com/user/repo"  # Deploy from GitHub repo
+# =============================================================================
+# 🌐 WEB APPLICATION CONFIGURATION
+# =============================================================================
+# Uncomment and configure ONE of the following options to deploy a web app:
+
+# Option 1: Deploy from Local Folder
+# WEB_APP_LOCAL_PATH="/Users/username/Documents/my-react-app"
+# Example: WEB_APP_LOCAL_PATH="/Users/codinggents/Documents/lambdaforge"
+
+# Option 2: Deploy from GitHub Repository  
+# WEB_APP_GITHUB_REPO="https://github.com/username/repository-name"
+# Example: WEB_APP_GITHUB_REPO="https://github.com/your-username/lambdaforge"
+
+# Option 3: Infrastructure Only (Default)
+# Leave both options commented out to deploy only AWS infrastructure
+
+# 📋 Requirements for Web Apps:
+# - Must have package.json file
+# - Must have "build" script that creates build/ or dist/ folder
+# - Supports React, Vue, Angular, and other Node.js web apps
+# =============================================================================
 
 # Colors for output
 RED='\\033[0;31m'
@@ -533,7 +550,14 @@ check_web_app_config() {
         print_status "Web app source: GitHub repository (\$WEB_APP_GITHUB_REPO)"
     else
         print_warning "No web app source specified. Only AWS infrastructure will be created."
-        print_status "To deploy a web app, set WEB_APP_LOCAL_PATH or WEB_APP_GITHUB_REPO in this script."
+        echo ""
+        print_status "💡 To deploy a web application alongside your infrastructure:"
+        echo "   1. Edit this script (deploy.sh)"
+        echo "   2. Uncomment and set either:"
+        echo "      • WEB_APP_LOCAL_PATH=\"/path/to/your/app\""
+        echo "      • WEB_APP_GITHUB_REPO=\"https://github.com/user/repo\""
+        echo "   3. Re-run: ./deploy.sh"
+        echo ""
     fi
 }
 
@@ -909,7 +933,14 @@ check_web_app_config() {
         print_status "Web app source: GitHub repository (\$WEB_APP_GITHUB_REPO)"
     else
         print_warning "No web app source specified. Only AWS infrastructure will be created."
-        print_status "To deploy a web app, set WEB_APP_LOCAL_PATH or WEB_APP_GITHUB_REPO in this script."
+        echo ""
+        print_status "💡 To deploy a web application alongside your infrastructure:"
+        echo "   1. Edit this script (deploy.sh)"
+        echo "   2. Uncomment and set either:"
+        echo "      • WEB_APP_LOCAL_PATH=\"/path/to/your/app\""
+        echo "      • WEB_APP_GITHUB_REPO=\"https://github.com/user/repo\""
+        echo "   3. Re-run: ./deploy.sh"
+        echo ""
     fi
 }
 
