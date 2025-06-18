@@ -1,9 +1,18 @@
 import React from 'react';
-import { Info, ChevronLeft, ChevronRight, Zap, Rocket } from 'lucide-react';
+import { Info, ChevronLeft, ChevronRight, Zap, Rocket, AlertTriangle } from 'lucide-react';
+import { useSecurityContext } from '../SecurityProvider';
 
 const AWSRequiredStep = ({ formData, updateFormData, nextStep, prevStep, currentStep, totalSteps }) => {
+  const { logSecurityEvent } = useSecurityContext();
+
   const handleInputChange = (field, value) => {
     updateFormData({ [field]: value });
+    
+    // Log security event for form changes
+    logSecurityEvent('FORM_FIELD_CHANGED', {
+      field,
+      hasValue: !!value
+    });
   };
 
   const fillTestData = () => {
@@ -11,8 +20,6 @@ const AWSRequiredStep = ({ formData, updateFormData, nextStep, prevStep, current
       projectName: 'demo-ecommerce-platform',
       awsRegion: 'us-east-1',
       environment: 'Development',
-      awsAccessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-      awsSecretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYzEXAMPLEKEY',
       vpcCidrBlock: '10.0.0.0/16'
     };
     updateFormData(testData);
@@ -23,8 +30,6 @@ const AWSRequiredStep = ({ formData, updateFormData, nextStep, prevStep, current
       projectName: 'lambdaforge-production',
       awsRegion: 'us-east-1',
       environment: 'Production',
-      awsAccessKeyId: '', // User needs to fill this
-      awsSecretAccessKey: '', // User needs to fill this
       vpcCidrBlock: '10.0.0.0/16',
       
       // Infrastructure for React App with AWS
@@ -60,7 +65,7 @@ const AWSRequiredStep = ({ formData, updateFormData, nextStep, prevStep, current
 
   const environments = ['Development', 'Staging', 'Production'];
 
-  const isValid = formData.projectName && formData.awsAccessKeyId && formData.awsSecretAccessKey && formData.vpcCidrBlock;
+  const isValid = formData.projectName && formData.vpcCidrBlock;
 
   return (
     <div className="space-y-6">
@@ -100,97 +105,95 @@ const AWSRequiredStep = ({ formData, updateFormData, nextStep, prevStep, current
         </div>
       </div>
 
-      {/* Form Fields */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Project Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Project Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Enter project name"
-            value={formData.projectName}
-            onChange={(e) => handleInputChange('projectName', e.target.value)}
-          />
+      {/* AWS Credentials Section */}
+      <div className="bg-white border border-aws-gray-200 rounded-lg p-6 mb-6">
+        <h3 className="text-lg font-semibold text-aws-blue mb-4 flex items-center">
+          🔐 AWS Credentials
+        </h3>
+        
+        {/* Security Notice */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-yellow-800 font-semibold text-sm">Security Notice</h4>
+              <p className="text-yellow-700 text-sm mt-1">
+                AWS credentials are configured directly in the deployment script for better security.
+              </p>
+              <ul className="text-yellow-700 text-sm mt-2 space-y-1">
+                <li>• Credentials are not stored in the web application</li>
+                <li>• Use IAM roles for production deployments (recommended)</li>
+                <li>• Temporary credentials via AWS STS are supported</li>
+                <li>• Never commit credentials to version control</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
-        {/* AWS Region */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            AWS Region <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="form-select"
-            value={formData.awsRegion}
-            onChange={(e) => handleInputChange('awsRegion', e.target.value)}
-          >
-            {awsRegions.map(region => (
-              <option key={region} value={region}>{region}</option>
-            ))}
-          </select>
-        </div>
+        {/* Form Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Project Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Project Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Enter project name"
+              value={formData.projectName}
+              onChange={(e) => handleInputChange('projectName', e.target.value)}
+            />
+          </div>
 
-        {/* Environment */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Environment <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="form-select"
-            value={formData.environment}
-            onChange={(e) => handleInputChange('environment', e.target.value)}
-          >
-            {environments.map(env => (
-              <option key={env} value={env}>{env}</option>
-            ))}
-          </select>
-        </div>
+          {/* AWS Region */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              AWS Region <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="form-select"
+              value={formData.awsRegion}
+              onChange={(e) => handleInputChange('awsRegion', e.target.value)}
+            >
+              {awsRegions.map(region => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
+          </div>
 
-        {/* AWS Access Key ID */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            AWS Access Key ID <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Enter AWS Access Key ID"
-            value={formData.awsAccessKeyId}
-            onChange={(e) => handleInputChange('awsAccessKeyId', e.target.value)}
-          />
-        </div>
+          {/* Environment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Environment <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="form-select"
+              value={formData.environment}
+              onChange={(e) => handleInputChange('environment', e.target.value)}
+            >
+              {environments.map(env => (
+                <option key={env} value={env}>{env}</option>
+              ))}
+            </select>
+          </div>
 
-        {/* AWS Secret Access Key */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            AWS Secret Access Key <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder="Enter AWS Secret Access Key"
-            value={formData.awsSecretAccessKey}
-            onChange={(e) => handleInputChange('awsSecretAccessKey', e.target.value)}
-          />
-        </div>
-
-        {/* VPC CIDR Block */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            VPC CIDR Block <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g., 10.0.0.0/16"
-            value={formData.vpcCidrBlock}
-            onChange={(e) => handleInputChange('vpcCidrBlock', e.target.value)}
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            CIDR block for the AWS VPC that will be created for your infrastructure.
-          </p>
+          {/* VPC CIDR Block */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              VPC CIDR Block <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g., 10.0.0.0/16"
+              value={formData.vpcCidrBlock}
+              onChange={(e) => handleInputChange('vpcCidrBlock', e.target.value)}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              CIDR block for the AWS VPC that will be created for your infrastructure.
+            </p>
+          </div>
         </div>
       </div>
 

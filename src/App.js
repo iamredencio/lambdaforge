@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Header from './components/Header';
 import StepIndicator from './components/StepIndicator';
 import Marketplace from './components/Marketplace';
 import AIArchitectureSuggestions from './components/AIArchitectureSuggestions';
+import SecurityProvider from './components/SecurityProvider';
+import SecurityWarning from './components/SecurityWarning';
 import AWSRequiredStep from './components/steps/AWSRequiredStep';
 import InfrastructureStep from './components/steps/InfrastructureStep';
 import ComputeStep from './components/steps/ComputeStep';
@@ -29,7 +31,25 @@ const steps = [
 
 function AppContent() {
   const navigate = useNavigate();
+  const { stepId } = useParams();
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Sync URL parameter with current step
+  useEffect(() => {
+    const urlStep = parseInt(stepId);
+    if (urlStep && urlStep >= 1 && urlStep <= steps.length && urlStep !== currentStep) {
+      setCurrentStep(urlStep);
+    }
+  }, [stepId, currentStep]);
+
+  // Sync current step with URL when step changes programmatically
+  useEffect(() => {
+    const urlStep = parseInt(stepId);
+    if (urlStep !== currentStep) {
+      navigate(`/step/${currentStep}`, { replace: true });
+    }
+  }, [currentStep, stepId, navigate]);
+
   const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
   const [environments, setEnvironments] = useState([
     { id: 'dev', name: 'Development', status: 'active', cost: 45 },
@@ -43,8 +63,6 @@ function AppContent() {
     projectName: '',
     awsRegion: 'us-east-1',
     environment: 'Development',
-    awsAccessKeyId: '',
-    awsSecretAccessKey: '',
     vpcCidrBlock: '10.0.0.0/16',
     
     // Infrastructure
@@ -76,6 +94,7 @@ function AppContent() {
   const handleMarketplaceSelect = (packageData) => {
     setFormData(prev => ({ ...prev, ...packageData }));
     setCurrentStep(9); // Jump to Generate step
+    navigate('/step/9');
   };
 
   const handleAISuggestion = (suggestionData) => {
@@ -89,8 +108,6 @@ function AppContent() {
       projectName: '',
       awsRegion: 'us-east-1',
       environment: 'Development',
-      awsAccessKeyId: '',
-      awsSecretAccessKey: '',
       vpcCidrBlock: '10.0.0.0/16',
       
       // Infrastructure
@@ -157,13 +174,17 @@ function AppContent() {
 
   const nextStep = () => {
     if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
+      const newStep = currentStep + 1;
+      setCurrentStep(newStep);
+      navigate(`/step/${newStep}`);
     }
   };
 
   const prevStep = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      const newStep = currentStep - 1;
+      setCurrentStep(newStep);
+      navigate(`/step/${newStep}`);
     }
   };
 
@@ -183,6 +204,9 @@ function AppContent() {
         />
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <StepIndicator steps={steps} currentStep={currentStep} />
+          
+          {/* Security Warning - Show on all steps */}
+          <SecurityWarning />
           
           {/* AI Suggestions - Show after step 2 */}
           {currentStep > 2 && (
@@ -268,7 +292,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <SecurityProvider>
+        <AppContent />
+      </SecurityProvider>
     </Router>
   );
 }
