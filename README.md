@@ -1,266 +1,218 @@
-# LambdaForge - AWS Infrastructure Automation Platform
+# LambdaForge - AWS Infrastructure Generator
 
-![LambdaForge Logo](https://img.shields.io/badge/LambdaForge-AWS%20Infrastructure%20Automation-orange?style=for-the-badge&logo=aws-lambda)
+🚀 **LambdaForge** is an intelligent AWS infrastructure generator that creates complete, production-ready cloud architectures through an intuitive web interface. Generate infrastructure-as-code, deployment scripts, and comprehensive documentation in minutes.
 
-LambdaForge is an intelligent AWS infrastructure provisioning platform that uses AWS Lambda as the core orchestration engine. Users describe their application needs through a beautiful web interface, and Lambda functions automatically design, provision, and manage the optimal AWS architecture.
+## ✨ Features
 
-## 🚀 Core Features
+- **Visual Infrastructure Designer**: Interactive step-by-step wizard for selecting AWS services
+- **AI-Powered Recommendations**: Smart suggestions based on your project requirements
+- **Production-Ready Templates**: Generate CloudFormation templates with best practices
+- **Automated Deployment Scripts**: Complete bash scripts with error handling and progress tracking
+- **Security-First Approach**: Built-in security configurations and credential management
+- **Cost Optimization**: Intelligent resource sizing and cost-effective configurations
+- **Comprehensive Documentation**: Auto-generated README files and deployment guides
 
-### 1. Intelligent Infrastructure Design
-- **Lambda Function**: `infrastructure-analyzer`
-- AI-powered architecture recommendations based on requirements
-- Uses ML to suggest best practices and cost-effective solutions
-- Input: Application requirements (traffic, data needs, compliance, budget)
-- Output: Optimized AWS architecture recommendations
+## 🔐 AWS Credentials Configuration
 
-### 2. Automated Resource Provisioning
-- **Lambda Function**: `resource-provisioner`
-- Directly creates AWS resources using AWS SDKs
-- Handles dependency ordering (VPC → Subnets → Security Groups → EC2/RDS)
-- Implements retry logic and error handling
-- Tracks provisioning status in DynamoDB
+**Security Notice**: LambdaForge keeps your AWS credentials secure by configuring them directly in the deployment script, not in the web application.
 
-### 3. Real-time Cost Optimization
-- **Lambda Function**: `cost-optimizer`
-- EventBridge scheduled trigger (daily)
-- Analyzes resource utilization via CloudWatch
-- Automatically right-sizes instances
-- Suggests and implements cost-saving measures
+### Choose Your Authentication Method
 
-### 4. Infrastructure Health Monitoring
-- **Lambda Function**: `health-monitor`
-- CloudWatch Events trigger on resource state changes
-- Auto-healing capabilities (restart failed instances, scale on demand)
-- Sends alerts via SNS when manual intervention needed
+#### Option 1: AWS Credentials (Development/Testing)
+Edit the generated `deploy.sh` file and uncomment/fill in your credentials:
 
-### 5. Environment Management
-- **Lambda Functions**: `environment-cloner`, `environment-destroyer`
-- Clone production to staging with one click
-- Safely tear down development environments
-- Manage environment lifecycle
+```bash
+# Uncomment and fill in your AWS credentials:
+AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_HERE"
+AWS_SECRET_ACCESS_KEY="YOUR_SECRET_KEY_HERE"
+```
 
-## 🏗️ Technical Architecture
+#### Option 2: IAM Roles (🏆 Recommended for Production)
+If running on AWS infrastructure (EC2, ECS, EKS, Lambda):
+- Attach an IAM role with required permissions to your instance
+- No additional configuration needed
+- The deployment script automatically uses the instance's IAM role
+- Most secure option - no credentials stored anywhere
 
-### Frontend
-- **React** web application with modern UI/UX
-- **Tailwind CSS** for styling with custom orange theme
-- **Multi-step wizard** interface matching AWS design patterns
-- Real-time updates via WebSocket (API Gateway WebSocket)
-- Hosted on S3 + CloudFront (when deployed)
+**Required IAM Permissions:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:*",
+        "lambda:*",
+        "apigateway:*",
+        "s3:*",
+        "iam:*",
+        "logs:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
 
-### Backend Services (Future Implementation)
-- **API Gateway**: REST endpoints + WebSocket for real-time updates
-- **Lambda Functions**: 8-10 specialized functions handling different aspects
-- **DynamoDB**: Store infrastructure state, user projects, deployment history
-- **S3**: Architecture diagrams, logs, backup configurations
-- **EventBridge**: Orchestrate complex workflows between Lambda functions
-- **Step Functions**: Handle multi-step provisioning workflows
-- **SNS**: Notifications and alerts
-- **CloudWatch**: Monitoring and logging
+#### Option 3: AWS CLI Profile
+If you have multiple AWS profiles configured:
 
-### Key Lambda Functions
-1. `api-handler` - Process web requests
-2. `infrastructure-analyzer` - AI-powered architecture design
-3. `resource-provisioner` - Create AWS resources
-4. `dependency-resolver` - Handle resource dependencies
-5. `cost-optimizer` - Continuous cost optimization
-6. `health-monitor` - Infrastructure monitoring
-7. `environment-manager` - Manage dev/staging/prod environments
-8. `notification-handler` - Send alerts and updates
+```bash
+# Edit deploy.sh and uncomment:
+AWS_PROFILE="your-profile-name"
+```
 
-## 🎯 User Journey
+#### Option 4: Environment Variables
+Set environment variables before running the deployment:
 
-### 1. Project Setup
-- User describes application (web app, API, data processing, etc.)
-- Specifies requirements (expected traffic, data size, compliance needs)
-- Sets budget constraints
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="us-east-1"
+./deploy.sh
+```
 
-### 2. Architecture Design
-- Lambda analyzes requirements
-- Generates multiple architecture options with cost estimates
-- User selects preferred option or requests modifications
-
-### 3. Automated Provisioning
-- Lambda orchestrates resource creation
-- Real-time progress updates via WebSocket
-- Handles errors and retries automatically
-
-### 4. Ongoing Management
-- Continuous monitoring and optimization
-- Automated scaling and cost management
-- Health checks and auto-healing
-
-## 🛠️ Installation & Setup
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn
-- AWS Account (for future deployment)
+- **AWS CLI** installed and configured
+- **Node.js 16+** (for web applications)
+- **Bash shell** (Linux/macOS/WSL)
 
-### Local Development
+### 1. Generate Your Infrastructure
+1. Visit the LambdaForge web interface
+2. Follow the step-by-step wizard to configure your infrastructure
+3. Download the generated deployment package
+
+### 2. Configure AWS Credentials
+Choose one of the authentication methods above and configure your credentials.
+
+### 3. Deploy Infrastructure
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd lambdaforge
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm start
+chmod +x deploy.sh delete.sh
+./deploy.sh
 ```
 
-The application will be available at `http://localhost:3000`
-
-### Build for Production
+### 4. Clean Up Resources (when done)
 ```bash
-# Build the application
-npm run build
+./delete.sh
 ```
 
-## 📋 Configuration Steps
+**⚠️ Warning**: The delete script will permanently remove all AWS resources created by this deployment.
 
-The application guides users through 9 configuration steps:
+## 🏗️ Generated Infrastructure Components
 
-1. **AWS Required** - AWS credentials and basic project setup
-2. **Infrastructure** - Select storage services (S3, DynamoDB, RDS, EBS, EFS)
-3. **Compute** - Choose compute services (Lambda, EC2, ECS, Fargate)
-4. **Integration** - API Gateway, EventBridge, SNS, Step Functions
-5. **Security** - IAM roles, Security Groups, KMS, Secrets Manager
-6. **Monitoring** - CloudWatch, X-Ray, CloudTrail, Alarms
-7. **Deployment** - CodePipeline, CodeBuild, CodeDeploy, CloudFormation
-8. **Optimization** - AI-powered cost and performance optimization
-9. **Generate** - Review and deploy infrastructure
+### Core Infrastructure
+- **VPC with Public/Private Subnets**: Secure network architecture
+- **Internet Gateway & NAT Gateway**: Proper internet connectivity
+- **Security Groups**: Least-privilege access controls
+- **Route Tables**: Optimized routing configuration
 
-## 🎨 Design Features
+### Compute Services
+- **AWS Lambda Functions**: Serverless compute with auto-scaling
+- **EC2 Instances**: When persistent compute is needed
+- **ECS/Fargate**: Container orchestration for microservices
+- **Auto Scaling Groups**: Automatic capacity management
 
-- **Orange Theme**: Custom color palette matching AWS design patterns
-- **Multi-step Wizard**: Progress indicator with completed/active states
-- **Service Cards**: Interactive selection with Lambda integration details
-- **Responsive Design**: Works on desktop, tablet, and mobile
-- **Real-time Feedback**: Status updates and validation messages
-- **Professional UI**: Clean, modern interface inspired by AWS Console
+### Storage & Database
+- **S3 Buckets**: Object storage with versioning and encryption
+- **RDS Instances**: Managed relational databases
+- **DynamoDB Tables**: NoSQL databases with on-demand scaling
+- **ElastiCache**: In-memory caching for performance
 
-## 🔧 Technologies Used
+### Integration & API
+- **API Gateway**: RESTful API management
+- **Application Load Balancer**: Traffic distribution
+- **CloudFront CDN**: Global content delivery
+- **SQS/SNS**: Message queuing and notifications
 
-- **Frontend**: React 18, React Router, Tailwind CSS
-- **Icons**: Lucide React
-- **Build Tool**: Create React App
-- **Styling**: Custom CSS with Tailwind utilities
-- **State Management**: React Hooks (useState)
+### Security & Monitoring
+- **IAM Roles & Policies**: Fine-grained access control
+- **CloudWatch**: Monitoring, logging, and alerting
+- **AWS WAF**: Web application firewall
+- **X-Ray**: Distributed tracing and debugging
 
-## 🚀 Innovative Features
+## 🛠️ Customization
 
-### AI-Powered Architecture Suggestions
-- Use AWS Bedrock to analyze requirements and suggest optimal architectures
-- Learn from successful deployments to improve recommendations
+### Environment Configuration
+The deployment script supports multiple environments:
+- **Development**: Cost-optimized with minimal redundancy
+- **Staging**: Production-like with reduced capacity
+- **Production**: High availability with full redundancy
 
-### Predictive Scaling
-- Lambda analyzes usage patterns
-- Preemptively scales resources before traffic spikes
+### Regional Deployment
+Deploy to any AWS region by modifying the region setting in your generated configuration.
 
-### Compliance Automation
-- Automatically configure security groups, IAM roles, encryption
-- Ensure GDPR, HIPAA, SOC2 compliance based on requirements
+### Resource Sizing
+Generated templates include intelligent resource sizing based on your project requirements.
 
-### Cost Prediction & Alerting
-- Real-time cost tracking
-- Predictive cost alerts before budget overruns
+## 🆘 Troubleshooting
 
-## 📊 Demo Scenarios
+### AWS Credentials Issues
+1. **"Unable to locate credentials"**: Configure AWS credentials using one of the methods above
+2. **"Access Denied"**: Ensure your credentials have the required IAM permissions
+3. **"Invalid security token"**: Check if your temporary credentials have expired
+4. **"Region not specified"**: Set AWS_DEFAULT_REGION or configure AWS CLI region
 
-1. **E-commerce Platform**: Provisioning web servers, databases, CDN, auto-scaling
-2. **Data Processing Pipeline**: Lambda, S3, Glue, Redshift orchestration
-3. **Microservices Architecture**: Container orchestration with ECS/EKS
-4. **Disaster Recovery**: Backup and failover automation
+### Deployment Failures
+1. **Check AWS credentials**: `aws sts get-caller-identity`
+2. **Verify region configuration**: `aws configure get region`
+3. **Review CloudFormation events** in AWS Console for specific errors
+4. **Check deployment script output** for detailed error messages
 
-## 🔐 Security Features
+### Common Solutions
+- Ensure AWS CLI is properly configured: `aws configure list`
+- Verify IAM permissions match the required policy above
+- Check AWS service limits in your region
+- Ensure unique resource names (S3 bucket names must be globally unique)
 
-- Least privilege IAM roles
-- Secure credential management
-- Encryption at rest and in transit
-- Automated security rule updates
-- Compliance monitoring
+## 🔒 Security Best Practices
 
-## 📈 Success Metrics
+### Credential Management
+- ✅ Use IAM roles when possible (most secure)
+- ✅ Use temporary credentials via AWS STS
+- ✅ Store credentials in deployment scripts, not web applications
+- ❌ Never commit credentials to version control
+- ❌ Avoid hardcoding credentials in source code
 
-- Successfully provision at least 3 different architecture types
-- Demonstrate cost savings through optimization
-- Show auto-healing capabilities
-- Prove scalability with load testing
+### Infrastructure Security
+- All resources deployed with least-privilege access
+- Security groups with minimal required ports
+- Encryption enabled for data at rest and in transit
+- VPC with private subnets for sensitive resources
+
+## 📊 Cost Optimization
+
+### Built-in Cost Controls
+- **Right-sizing**: Resources sized based on actual requirements
+- **Auto-scaling**: Automatic capacity adjustment
+- **Reserved Instances**: Recommendations for long-term workloads
+- **Spot Instances**: Cost savings for fault-tolerant workloads
+
+### Monitoring & Alerts
+- CloudWatch cost alarms
+- Budget notifications
+- Resource utilization monitoring
+- Automatic cleanup of unused resources
 
 ## 🤝 Contributing
 
-This is a hackathon project showcasing AWS Lambda-powered infrastructure automation. Contributions are welcome!
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🏆 Hackathon Project
+## 🆘 Support
 
-This project was built for an AWS hackathon focusing on innovative uses of AWS Lambda for infrastructure automation and management.
-
-## Deployment
-
-### Deploy LambdaForge to AWS
-
-You can deploy LambdaForge itself to AWS using the included deployment automation:
-
-#### Option 1: Using the UI
-1. Start the application locally
-2. Click the **"Deploy LambdaForge"** button in the AWS configuration step
-3. Fill in your AWS credentials
-4. Follow the deployment wizard
-
-#### Option 2: Using the Deployment Script
-```bash
-# Make sure you're in the project directory
-cd lambdaforge
-
-# Run the deployment script
-./deploy.sh
-
-# Or with custom parameters
-./deploy.sh -p my-lambdaforge -e Production -r us-west-2
-```
-
-#### Option 3: Manual CloudFormation Deployment
-```bash
-# Deploy the CloudFormation stack
-aws cloudformation deploy \
-  --template-file cloudformation/lambdaforge-template.yaml \
-  --stack-name lambdaforge-production-stack \
-  --parameter-overrides ProjectName=lambdaforge-production Environment=Production \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-
-# Build and upload the React app
-npm run build
-aws s3 sync build/ s3://your-bucket-name --delete
-
-# Invalidate CloudFront cache
-aws cloudfront create-invalidation --distribution-id YOUR_DISTRIBUTION_ID --paths "/*"
-```
-
-### Deployment Architecture
-
-When deployed to AWS, LambdaForge uses:
-
-- **S3 + CloudFront**: Static website hosting with global CDN
-- **Lambda + API Gateway**: Serverless API backend
-- **DynamoDB**: NoSQL database for application data
-- **CloudWatch**: Monitoring and logging
-- **WAF**: Web application firewall for security
-- **CodeBuild**: CI/CD pipeline for automated deployments
-
-### Estimated Costs
-
-- **Production**: $65-145/month
-- **Development**: $25-75/month
-
-See `DEPLOYMENT_GUIDE.md` for detailed cost breakdown and optimization strategies.
+- **Documentation**: [Full documentation](https://lambdaforge.dev/docs)
+- **Issues**: [GitHub Issues](https://github.com/lambdaforge/lambdaforge/issues)
+- **Community**: [Discord Community](https://discord.gg/lambdaforge)
+- **Email**: support@lambdaforge.dev
 
 ---
 
-**Built with ❤️ and AWS Lambda** 🚀 
+**Built with ❤️ for the AWS community**
+
+*LambdaForge - Making AWS infrastructure as code accessible to everyone* 
