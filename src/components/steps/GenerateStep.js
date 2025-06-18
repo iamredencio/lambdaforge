@@ -1418,10 +1418,7 @@ After deployment, check these AWS Console links:
       // Download as zip file
       await downloadZipFile(files, projectName);
 
-      // Show success message
-      setTimeout(() => {
-        alert(`✅ Successfully exported ${projectName}-infrastructure.zip!\n\n📦 Package contains:\n${Object.keys(files).map(filename => `• ${filename}`).join('\n')}\n\n🚀 Next steps:\n1. Extract the zip file\n2. Run: chmod +x deploy.sh delete.sh\n3. Verify AWS permissions and region\n4. Run: ./deploy.sh\n\n✨ Features included:\n• Auto-detects your AWS region\n• Provides direct links to all created resources\n• Fixed IAM role naming issues\n• Proper YAML CloudFormation format\n• Resource cleanup script (delete.sh)\n• Comprehensive error handling`);
-      }, 1000);
+
 
     } catch (error) {
       console.error('Export failed:', error);
