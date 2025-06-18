@@ -4,7 +4,7 @@ Description: 'LambdaForge - No IAM Template (uses existing service role)'
 Parameters:
   ProjectName:
     Type: String
-    Default: lambdaforge-production
+    Default: lambdaforge-development
     Description: Name of the project
   Environment:
     Type: String

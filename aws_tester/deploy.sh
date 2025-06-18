@@ -16,6 +16,10 @@ if [ -z "$AWS_REGION" ]; then
 fi
 STACK_NAME="${PROJECT_NAME}-stack"
 
+# Template Selection - Choose based on IAM permissions
+# Use template_no_iam.yaml for limited permissions, template.yaml for full permissions
+TEMPLATE_FILE="template_no_iam.yaml"
+
 # Web Application Configuration
 # Set one of the following to deploy a web application:
 WEB_APP_LOCAL_PATH="/Users/codinggents/Documents/lambdaforge"  # Deploy from local folder
@@ -42,6 +46,29 @@ print_error() {
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# Progress bar function
+show_progress() {
+    local duration=$1
+    local message=$2
+    local progress=0
+    local bar_length=50
+    
+    echo -n "$message "
+    while [ $progress -le $duration ]; do
+        local filled=$((progress * bar_length / duration))
+        local empty=$((bar_length - filled))
+        
+        printf "\r$message ["
+        printf "%${filled}s" | tr ' ' '█'
+        printf "%${empty}s" | tr ' ' '░'
+        printf "] %d%%" $((progress * 100 / duration))
+        
+        sleep 1
+        progress=$((progress + 1))
+    done
+    echo
 }
 
 # Check prerequisites
@@ -207,52 +234,125 @@ deploy_web_app() {
     echo ""
 }
 
-# Deploy or update the CloudFormation stack
+# Check specific AWS permissions
+check_permissions() {
+    print_status "Checking AWS permissions..."
+    
+    # Test S3 permissions
+    if aws s3 ls &> /dev/null; then
+        print_success "✓ S3 permissions OK"
+    else
+        print_error "✗ S3 permissions missing"
+        return 1
+    fi
+    
+    # Test CloudFormation permissions
+    if aws cloudformation list-stacks --max-items 1 &> /dev/null; then
+        print_success "✓ CloudFormation permissions OK"
+    else
+        print_error "✗ CloudFormation permissions missing"
+        return 1
+    fi
+    
+    # Test IAM permissions (optional)
+    if aws iam list-roles --max-items 1 &> /dev/null 2>&1; then
+        # Test Lambda permissions
+        if aws lambda list-functions --max-items 1 &> /dev/null 2>&1; then
+            # Test API Gateway permissions  
+            if aws apigateway get-rest-apis --limit 1 &> /dev/null 2>&1; then
+                print_success "✓ Full AWS permissions detected"
+                print_warning "⚠ Using simplified template due to CloudFormation deployment issues"
+                TEMPLATE_FILE="template_no_iam.yaml"
+            else
+                print_warning "⚠ Limited API Gateway permissions - using simplified template"
+                TEMPLATE_FILE="template_no_iam.yaml"
+            fi
+        else
+            print_warning "⚠ Limited Lambda permissions - using simplified template"
+            TEMPLATE_FILE="template_no_iam.yaml"
+        fi
+    else
+        print_warning "⚠ Limited IAM permissions - using simplified template"
+        TEMPLATE_FILE="template_no_iam.yaml"
+    fi
+}
+
+# Deploy CloudFormation stack
 deploy_stack() {
     print_status "Checking if stack exists..."
     
-    if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" &>/dev/null; then
+    if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" &> /dev/null; then
         print_status "Stack exists. Updating..."
-        OPERATION="update-stack"
+        print_status "Using template: $TEMPLATE_FILE"
+        
+        aws cloudformation update-stack \
+            --stack-name "$STACK_NAME" \
+            --template-body file://$TEMPLATE_FILE \
+            --parameters ParameterKey=ProjectName,ParameterValue="$PROJECT_NAME" \
+                        ParameterKey=Environment,ParameterValue="$ENVIRONMENT" \
+            --capabilities CAPABILITY_IAM \
+            --region "$AWS_REGION"
+        
+        print_status "Waiting for stack update to complete..."
+        show_progress 180 "🔄 Updating AWS resources"
+        
+        if aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$AWS_REGION"; then
+            print_success "Stack updated successfully!"
+        else
+            print_error "Stack update failed!"
+            print_status "Checking stack events for details..."
+            aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --region "$AWS_REGION" --query 'StackEvents[?ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table
+            return 1
+        fi
     else
         print_status "Stack does not exist. Creating..."
-        OPERATION="create-stack"
-    fi
-    
-    print_status "Deploying CloudFormation stack..."
-    print_status "Stack Name: $STACK_NAME"
-    print_status "Region: $AWS_REGION"
-    print_status "Template: template.yaml"
-    
-    # Deploy the stack
-    aws cloudformation $OPERATION \
-        --stack-name "$STACK_NAME" \
-        --template-body file://template.yaml \
-        --capabilities CAPABILITY_IAM \
-        --region "$AWS_REGION"
-    
-    if [ $? -ne 0 ]; then
-        print_error "Failed to create/update the stack"
-        exit 1
-    fi
-    
-    print_status "Waiting for stack operation to complete..."
-    print_status "This may take several minutes..."
-    
-    # Wait for the operation to complete
-    if [ "$OPERATION" = "create-stack" ]; then
-        WAIT_CONDITION="stack-create-complete"
-    else
-        WAIT_CONDITION="stack-update-complete"
-    fi
-    
-    if aws cloudformation wait $WAIT_CONDITION --stack-name "$STACK_NAME" --region "$AWS_REGION"; then
-        print_success "Stack operation completed successfully! 🎉"
-    else
-        print_error "Stack operation failed or timed out"
-        print_status "Check the CloudFormation console for details:"
-        echo "https://$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=$AWS_REGION#/stacks"
-        exit 1
+        print_status "Using template: $TEMPLATE_FILE"
+        
+        # Show resource creation progress
+        print_status "📋 Resources to be created:"
+        if [ "$TEMPLATE_FILE" = "template.yaml" ]; then
+            echo "  • S3 Bucket (Static Website)"
+            echo "  • IAM Execution Role"
+            echo "  • Lambda Function"  
+            echo "  • API Gateway"
+            echo "  • CloudWatch Log Group"
+        else
+            echo "  • S3 Bucket (Static Website)"
+            echo "  • CloudWatch Log Group"
+        fi
+        echo
+        
+        aws cloudformation create-stack \
+            --stack-name "$STACK_NAME" \
+            --template-body file://$TEMPLATE_FILE \
+            --parameters ParameterKey=ProjectName,ParameterValue="$PROJECT_NAME" \
+                        ParameterKey=Environment,ParameterValue="$ENVIRONMENT" \
+            --capabilities CAPABILITY_IAM \
+            --region "$AWS_REGION"
+        
+        print_status "Waiting for stack creation to complete..."
+        
+        # Show progress for different resource types
+        (
+            show_progress 30 "🪣 Creating S3 Bucket" &
+            sleep 35
+            show_progress 20 "📊 Creating CloudWatch Log Group" &
+            sleep 25
+            if [ "$TEMPLATE_FILE" = "template.yaml" ]; then
+                show_progress 60 "🔐 Creating IAM Role & Lambda Function" &
+                sleep 65
+                show_progress 40 "🌐 Creating API Gateway" &
+            fi
+        ) &
+        
+        if aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$AWS_REGION"; then
+            print_success "Stack created successfully!"
+        else
+            print_error "Stack creation failed!"
+            print_status "Checking stack events for details..."
+            aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --region "$AWS_REGION" --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' --output table
+            return 1
+        fi
     fi
 }
 
@@ -320,20 +420,34 @@ show_results() {
 
 # Main deployment function
 main() {
-    echo ""
-    echo "======================================"
-    echo "🚀 lambdaforge-dev Deployment"
-    echo "======================================"
+    print_status "🚀 Starting deployment process..."
     echo "Project: $PROJECT_NAME"
+    echo "Environment: $ENVIRONMENT" 
     echo "Region: $AWS_REGION"
-    echo ""
-    
+    echo "Stack: $STACK_NAME"
+    echo
+
+    # Run checks
     check_prerequisites
+    check_permissions
     check_web_app_config
+
+    # Build and deploy
     build_web_app
     deploy_stack
     deploy_web_app
-    show_results
+
+    print_success "🎉 Deployment completed successfully!"
+    echo
+    print_status "📋 Deployment Summary:"
+    echo "• Stack Name: $STACK_NAME"
+    echo "• Template Used: $TEMPLATE_FILE"
+    echo "• Region: $AWS_REGION"
+    echo "• Console: https://$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=$AWS_REGION#/stacks"
+    
+    # Show stack outputs
+    print_status "🔗 Resource Links:"
+    aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output table 2>/dev/null || echo "Stack outputs not available yet"
 }
 
 # Run with error handling

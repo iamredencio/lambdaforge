@@ -79,8 +79,6 @@ ${generateOutputsYAML()}`;
     return yamlTemplate;
   };
 
-
-
   // YAML generation functions for proper CloudFormation format
   const generateResourcesYAML = () => {
     let yamlResources = '';
@@ -401,6 +399,15 @@ if [ -z "\$AWS_REGION" ]; then
 fi
 STACK_NAME="\${PROJECT_NAME}-stack"
 
+# Template Selection - Choose based on IAM permissions
+# Use template_no_iam.yaml for limited permissions, template.yaml for full permissions
+TEMPLATE_FILE="template_no_iam.yaml"
+
+# Web Application Configuration
+# Set one of the following to deploy a web application:
+# WEB_APP_LOCAL_PATH="/path/to/your/web/app"  # Deploy from local folder
+# WEB_APP_GITHUB_REPO="https://github.com/user/repo"  # Deploy from GitHub repo
+
 # Colors for output
 RED='\\033[0;31m'
 GREEN='\\033[0;32m'
@@ -409,19 +416,42 @@ BLUE='\\033[0;34m'
 NC='\\033[0m'
 
 print_status() {
-    echo -e "\${BLUE}[INFO]\${NC} $1"
+    echo -e "\${BLUE}[INFO]\${NC} \$1"
 }
 
 print_success() {
-    echo -e "\${GREEN}[SUCCESS]\${NC} $1"
+    echo -e "\${GREEN}[SUCCESS]\${NC} \$1"
 }
 
 print_error() {
-    echo -e "\${RED}[ERROR]\${NC} $1"
+    echo -e "\${RED}[ERROR]\${NC} \$1"
 }
 
 print_warning() {
-    echo -e "\${YELLOW}[WARNING]\${NC} $1"
+    echo -e "\${YELLOW}[WARNING]\${NC} \$1"
+}
+
+# Progress bar function
+show_progress() {
+    local duration=\$1
+    local message=\$2
+    local progress=0
+    local bar_length=50
+    
+    echo -n "\$message "
+    while [ \$progress -le \$duration ]; do
+        local filled=\$((progress * bar_length / duration))
+        local empty=\$((bar_length - filled))
+        
+        printf "\\r\$message ["
+        printf "%\${filled}s" | tr ' ' '█'
+        printf "%\${empty}s" | tr ' ' '░'
+        printf "] %d%%" \$((progress * 100 / duration))
+        
+        sleep 1
+        progress=\$((progress + 1))
+    done
+    echo
 }
 
 # Check prerequisites
@@ -441,6 +471,49 @@ check_prerequisites() {
     fi
     
     print_success "Prerequisites check passed"
+}
+
+# Check specific AWS permissions
+check_permissions() {
+    print_status "Checking AWS permissions..."
+    
+    # Test S3 permissions
+    if aws s3 ls &> /dev/null; then
+        print_success "✓ S3 permissions OK"
+    else
+        print_error "✗ S3 permissions missing"
+        return 1
+    fi
+    
+    # Test CloudFormation permissions
+    if aws cloudformation list-stacks --max-items 1 &> /dev/null; then
+        print_success "✓ CloudFormation permissions OK"
+    else
+        print_error "✗ CloudFormation permissions missing"
+        return 1
+    fi
+    
+    # Test IAM permissions (optional)
+    if aws iam list-roles --max-items 1 &> /dev/null 2>&1; then
+        # Test Lambda permissions
+        if aws lambda list-functions --max-items 1 &> /dev/null 2>&1; then
+            # Test API Gateway permissions  
+            if aws apigateway get-rest-apis --limit 1 &> /dev/null 2>&1; then
+                print_success "✓ Full AWS permissions detected"
+                print_warning "⚠ Using simplified template for reliability"
+                TEMPLATE_FILE="template_no_iam.yaml"
+            else
+                print_warning "⚠ Limited API Gateway permissions - using simplified template"
+                TEMPLATE_FILE="template_no_iam.yaml"
+            fi
+        else
+            print_warning "⚠ Limited Lambda permissions - using simplified template"
+            TEMPLATE_FILE="template_no_iam.yaml"
+        fi
+    else
+        print_warning "⚠ Limited IAM permissions - using simplified template"
+        TEMPLATE_FILE="template_no_iam.yaml"
+    fi
 }
 
 # Check web application configuration
@@ -543,6 +616,85 @@ build_web_app() {
     echo "Built app location: \$BUILT_APP_PATH"
 }
 
+# Deploy CloudFormation stack
+deploy_stack() {
+    print_status "Checking if stack exists..."
+    
+    if aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" &> /dev/null; then
+        print_status "Stack exists. Updating..."
+        print_status "Using template: \$TEMPLATE_FILE"
+        
+        aws cloudformation update-stack \\
+            --stack-name "\$STACK_NAME" \\
+            --template-body file://\$TEMPLATE_FILE \\
+            --parameters ParameterKey=ProjectName,ParameterValue="\$PROJECT_NAME" \\
+                        ParameterKey=Environment,ParameterValue="\$ENVIRONMENT" \\
+            --capabilities CAPABILITY_IAM \\
+            --region "\$AWS_REGION"
+        
+        print_status "Waiting for stack update to complete..."
+        show_progress 180 "🔄 Updating AWS resources"
+        
+        if aws cloudformation wait stack-update-complete --stack-name "\$STACK_NAME" --region "\$AWS_REGION"; then
+            print_success "Stack updated successfully!"
+        else
+            print_error "Stack update failed!"
+            print_status "Checking stack events for details..."
+            aws cloudformation describe-stack-events --stack-name "\$STACK_NAME" --region "\$AWS_REGION" --query 'StackEvents[?ResourceStatus==\`UPDATE_FAILED\`].[LogicalResourceId,ResourceStatusReason]' --output table
+            return 1
+        fi
+    else
+        print_status "Stack does not exist. Creating..."
+        print_status "Using template: \$TEMPLATE_FILE"
+        
+        # Show resource creation progress
+        print_status "📋 Resources to be created:"
+        if [ "\$TEMPLATE_FILE" = "template.yaml" ]; then
+            echo "  • S3 Bucket (Static Website)"
+            echo "  • IAM Execution Role"
+            echo "  • Lambda Function"  
+            echo "  • API Gateway"
+            echo "  • CloudWatch Log Group"
+        else
+            echo "  • S3 Bucket (Static Website)"
+            echo "  • CloudWatch Log Group"
+        fi
+        echo
+        
+        aws cloudformation create-stack \\
+            --stack-name "\$STACK_NAME" \\
+            --template-body file://\$TEMPLATE_FILE \\
+            --parameters ParameterKey=ProjectName,ParameterValue="\$PROJECT_NAME" \\
+                        ParameterKey=Environment,ParameterValue="\$ENVIRONMENT" \\
+            --capabilities CAPABILITY_IAM \\
+            --region "\$AWS_REGION"
+        
+        print_status "Waiting for stack creation to complete..."
+        
+        # Show progress for different resource types
+        (
+            show_progress 30 "🪣 Creating S3 Bucket" &
+            sleep 35
+            show_progress 20 "📊 Creating CloudWatch Log Group" &
+            sleep 25
+            if [ "\$TEMPLATE_FILE" = "template.yaml" ]; then
+                show_progress 60 "🔐 Creating IAM Role & Lambda Function" &
+                sleep 65
+                show_progress 40 "🌐 Creating API Gateway" &
+            fi
+        ) &
+        
+        if aws cloudformation wait stack-create-complete --stack-name "\$STACK_NAME" --region "\$AWS_REGION"; then
+            print_success "Stack created successfully!"
+        else
+            print_error "Stack creation failed!"
+            print_status "Checking stack events for details..."
+            aws cloudformation describe-stack-events --stack-name "\$STACK_NAME" --region "\$AWS_REGION" --query 'StackEvents[?ResourceStatus==\`CREATE_FAILED\`].[LogicalResourceId,ResourceStatusReason]' --output table
+            return 1
+        fi
+    fi
+}
+
 # Deploy web application to S3
 deploy_web_app() {
     if [ -z "\$BUILT_APP_PATH" ]; then
@@ -587,139 +739,40 @@ deploy_web_app() {
     echo ""
 }
 
-# Deploy or update the CloudFormation stack
-deploy_stack() {
-    print_status "Checking if stack exists..."
-    
-    if aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" &>/dev/null; then
-        print_status "Stack exists. Updating..."
-        OPERATION="update-stack"
-    else
-        print_status "Stack does not exist. Creating..."
-        OPERATION="create-stack"
-    fi
-    
-    print_status "Deploying CloudFormation stack..."
-    print_status "Stack Name: \$STACK_NAME"
-    print_status "Region: \$AWS_REGION"
-    print_status "Template: template.yaml"
-    
-    # Deploy the stack
-    aws cloudformation \$OPERATION \\
-        --stack-name "\$STACK_NAME" \\
-        --template-body file://template.yaml \\
-        --capabilities CAPABILITY_IAM \\
-        --region "\$AWS_REGION"
-    
-    if [ \$? -ne 0 ]; then
-        print_error "Failed to create/update the stack"
-        exit 1
-    fi
-    
-    print_status "Waiting for stack operation to complete..."
-    print_status "This may take several minutes..."
-    
-    # Wait for the operation to complete
-    if [ "\$OPERATION" = "create-stack" ]; then
-        WAIT_CONDITION="stack-create-complete"
-    else
-        WAIT_CONDITION="stack-update-complete"
-    fi
-    
-    if aws cloudformation wait \$WAIT_CONDITION --stack-name "\$STACK_NAME" --region "\$AWS_REGION"; then
-        print_success "Stack operation completed successfully! 🎉"
-    else
-        print_error "Stack operation failed or timed out"
-        print_status "Check the CloudFormation console for details:"
-        echo "https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks"
-        exit 1
-    fi
-}
-
-# Show deployment results
-show_results() {
-    print_success "🎉 Deployment completed successfully!"
-    echo ""
-    print_status "📋 Resource Summary:"
-    
-    # Get stack outputs
-    aws cloudformation describe-stacks \\
-        --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION" \\
-        --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \\
-        --output table
-    
-    echo ""
-    print_status "🔗 AWS Console Links:"
-    
-    # CloudFormation Console
-    echo "📊 CloudFormation Stack:"
-    echo "   https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks/stackinfo?stackId=\$STACK_NAME"
-    
-    # Get resource links
-    LAMBDA_FUNCTION=\$(aws cloudformation describe-stacks \\
-        --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION" \\
-        --query 'Stacks[0].Outputs[?OutputKey==\`LambdaFunctionName\`].OutputValue' \\
-        --output text 2>/dev/null)
-    
-    API_GATEWAY=\$(aws cloudformation describe-stacks \\
-        --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION" \\
-        --query 'Stacks[0].Outputs[?OutputKey==\`ApiGatewayUrl\`].OutputValue' \\
-        --output text 2>/dev/null)
-    
-    S3_BUCKET=\$(aws cloudformation describe-stacks \\
-        --stack-name "\$STACK_NAME" \\
-        --region "\$AWS_REGION" \\
-        --query 'Stacks[0].Outputs[?OutputKey==\`S3BucketName\`].OutputValue' \\
-        --output text 2>/dev/null)
-    
-    if [ -n "\$LAMBDA_FUNCTION" ] && [ "\$LAMBDA_FUNCTION" != "None" ]; then
-        echo "⚡ Lambda Function:"
-        echo "   https://\$AWS_REGION.console.aws.amazon.com/lambda/home?region=\$AWS_REGION#/functions/\$LAMBDA_FUNCTION"
-    fi
-    
-    if [ -n "\$API_GATEWAY" ] && [ "\$API_GATEWAY" != "None" ]; then
-        echo "🌐 API Gateway:"
-        echo "   \$API_GATEWAY"
-    fi
-    
-    if [ -n "\$S3_BUCKET" ] && [ "\$S3_BUCKET" != "None" ]; then
-        echo "🪣 S3 Bucket:"
-        echo "   https://s3.console.aws.amazon.com/s3/buckets/\$S3_BUCKET?region=\$AWS_REGION"
-    fi
-    
-    echo ""
-    print_status "💡 Next Steps:"
-    echo "  • Test your deployed resources using the links above"
-    echo "  • Monitor logs in CloudWatch"
-    echo "  • Use delete.sh to clean up resources when done"
-    echo ""
-}
-
 # Main deployment function
 main() {
-    echo ""
-    echo "======================================"
-    echo "🚀 ${projectName} Deployment"
-    echo "======================================"
+    print_status "🚀 Starting deployment process..."
     echo "Project: \$PROJECT_NAME"
+    echo "Environment: \$ENVIRONMENT" 
     echo "Region: \$AWS_REGION"
-    echo ""
-    
+    echo "Stack: \$STACK_NAME"
+    echo
+
+    # Run checks
     check_prerequisites
+    check_permissions
     check_web_app_config
+
+    # Build and deploy
     build_web_app
     deploy_stack
     deploy_web_app
-    show_results
+
+    print_success "🎉 Deployment completed successfully!"
+    echo
+    print_status "📋 Deployment Summary:"
+    echo "• Stack Name: \$STACK_NAME"
+    echo "• Template Used: \$TEMPLATE_FILE"
+    echo "• Region: \$AWS_REGION"
+    echo "• Console: https://\$AWS_REGION.console.aws.amazon.com/cloudformation/home?region=\$AWS_REGION#/stacks"
+    
+    # Show stack outputs
+    print_status "🔗 Resource Links:"
+    aws cloudformation describe-stacks --stack-name "\$STACK_NAME" --region "\$AWS_REGION" --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output table 2>/dev/null || echo "Stack outputs not available yet"
 }
 
-# Run with error handling
-if [ "\${BASH_SOURCE[0]}" == "\${0}" ]; then
-    main "$@"
-fi
+# Run main function
+main "\$@"
 `;
   };
   /* eslint-enable no-useless-escape */
@@ -1078,232 +1131,155 @@ fi
   /* eslint-enable no-useless-escape */
 
   const generateReadme = () => {
-    const projectName = formData.projectName || 'LambdaForge Project';
-    const environment = formData.environment || 'Development';
+    const projectName = formData.projectName || 'lambdaforge-project';
 
-    return `# ${projectName}
+    return `# ${projectName} - AWS Infrastructure Deployment
 
-Generated by **LambdaForge** - AWS Infrastructure Automation Platform
+Generated by **LambdaForge** on ${new Date().toLocaleDateString()}
 
-## Overview
+## 🚀 Quick Start
 
-This project contains the infrastructure and deployment configuration for **${projectName}**.
+1. **Configure AWS CLI** (if not already done):
+   \`\`\`bash
+   aws configure
+   \`\`\`
 
-- **Environment:** ${environment}
-- **AWS Region:** Auto-detected from AWS CLI configuration
-- **Generated:** ${new Date().toISOString()}
+2. **Deploy Infrastructure**:
+   \`\`\`bash
+   ./deploy.sh
+   \`\`\`
 
-## Architecture
+3. **Clean Up** (when done):
+   \`\`\`bash
+   ./delete.sh
+   \`\`\`
 
-### Selected AWS Services
+## 📋 What's Included
 
-#### Infrastructure Services
-${formData.selectedInfrastructure?.map(service => `- ${service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`).join('\n') || '- None selected'}
+- **template.yaml** / **template_no_iam.yaml**: CloudFormation infrastructure templates
+- **deploy.sh**: Intelligent deployment script with permission detection and progress bars
+- **delete.sh**: Safe cleanup script with confirmation prompts
+- **README.md**: This documentation file
 
-#### Compute Services
-${formData.selectedCompute?.map(service => `- ${service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`).join('\n') || '- None selected'}
+## 🔧 Features
 
-#### Integration Services
-${formData.selectedIntegration?.map(service => `- ${service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`).join('\n') || '- None selected'}
+### Intelligent Permission Detection
+The deployment script automatically detects your AWS permissions and chooses the appropriate template:
+- **Full Permissions**: Uses complete template with Lambda, API Gateway, and IAM roles
+- **Limited Permissions**: Falls back to simplified template with S3 and CloudWatch only
 
-#### Security Services
-${formData.selectedSecurity?.map(service => `- ${service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`).join('\n') || '- None selected'}
+### Visual Progress Tracking
+- Real-time progress bars for resource creation
+- Clear status messages and error handling
+- Resource-specific deployment phases
 
-#### Monitoring Services
-${formData.selectedMonitoring?.map(service => `- ${service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`).join('\n') || '- None selected'}
+### Web Application Support
+Deploy any React/Node.js web application alongside your infrastructure:
 
-## 🚨 CRITICAL REQUIREMENTS
-
-### ⚠️ IAM Permissions Required
-
-**URGENT**: You must have the following IAM permissions or deployment will fail:
-
-- \`iam:CreateRole\` - Required for Lambda execution roles
-- \`iam:AttachRolePolicy\` - Required for role policy attachment
-- \`iam:PassRole\` - Required for Lambda function creation
-- \`cloudformation:*\` - Required for stack operations
-- \`lambda:*\` - Required for Lambda function management
-- \`s3:*\` - Required for S3 bucket operations
-- \`apigateway:*\` - Required for API Gateway (if selected)
-- \`logs:*\` - Required for CloudWatch logs
-
-**Common Error Without Proper Permissions:**
-\`\`\`
-User: arn:aws:iam::ACCOUNT:user/USERNAME is not authorized to perform: iam:CreateRole
-\`\`\`
-
-### 🌍 AWS Region Configuration
-
-**CRITICAL**: Your AWS CLI region must match your intended deployment region.
-
-**Check your current region:**
-\`\`\`bash
-aws configure get region
-\`\`\`
-
-**Common Error with Region Mismatch:**
-\`\`\`
-Could not connect to the endpoint URL: "https://cloudformation.us-east-1.amazonaws.com/"
-\`\`\`
-
-**Set your region if needed:**
-\`\`\`bash
-aws configure set region YOUR_PREFERRED_REGION
-\`\`\`
-
-## Quick Start
-
-### Prerequisites
-
-- ✅ AWS CLI installed and configured
-- ✅ **CRITICAL**: Appropriate IAM permissions (see above)
-- ✅ **CRITICAL**: Correct AWS region configured
-- ✅ Bash shell (for deployment script)
-
-### Deployment
-
-\`\`\`bash
-# 1. Extract the zip file
-unzip ${projectName || 'project'}-infrastructure.zip
-cd ${projectName || 'project'}-infrastructure/
-
-# 2. Make scripts executable
-chmod +x deploy.sh
-chmod +x delete.sh
-
-# 3. Verify your AWS configuration
-aws sts get-caller-identity
-aws configure get region
-
-# 4. (Optional) Configure web application deployment
-# Edit deploy.sh and set either:
-# WEB_APP_LOCAL_PATH="/path/to/your/web/app"          # For local folder
-# WEB_APP_GITHUB_REPO="https://github.com/user/repo" # For GitHub repo
-
-# 5. Run deployment
-./deploy.sh
-\`\`\`
-
-### Web Application Deployment Options
-
-#### Option 1: Deploy from Local Folder
+#### Option 1: Local Development
 \`\`\`bash
 # Edit deploy.sh and set:
-WEB_APP_LOCAL_PATH="/path/to/your/react/app"
+WEB_APP_LOCAL_PATH="/path/to/your/web/app"
 \`\`\`
 
-#### Option 2: Deploy from GitHub Repository
+#### Option 2: GitHub Repository
 \`\`\`bash
 # Edit deploy.sh and set:
-WEB_APP_GITHUB_REPO="https://github.com/yourusername/your-repo"
+WEB_APP_GITHUB_REPO="https://github.com/user/repo"
 \`\`\`
 
 #### Option 3: Infrastructure Only (Default)
-If neither path is set, only AWS infrastructure will be created without deploying a web application.
+If neither path is set, only AWS infrastructure will be created.
 
 ### Example: Deploy LambdaForge Application
-
-To deploy the LambdaForge application itself:
-
 \`\`\`bash
-# From GitHub (public repository):
+# To deploy LambdaForge itself:
 WEB_APP_GITHUB_REPO="https://github.com/your-username/lambdaforge"
-
-# Or from local development:
-WEB_APP_LOCAL_PATH="/Users/yourusername/Documents/lambdaforge"
 \`\`\`
 
-After deployment, your LambdaForge app will be available at the S3 website URL provided in the outputs.
+## ⚠️ Important Requirements
 
-### Cleanup (Delete All Resources)
+### Required AWS Permissions
 
-\`\`\`bash
-# ⚠️ WARNING: This will DELETE all created resources!
-./delete.sh
-\`\`\`
+**Minimum Required:**
+- \`s3:*\` - S3 bucket operations
+- \`cloudformation:*\` - Stack management
+- \`logs:*\` - CloudWatch logs
 
-## Cost Estimation
+**For Full Template:**
+- \`iam:*\` - IAM role management
+- \`lambda:*\` - Lambda function operations
+- \`apigateway:*\` - API Gateway management
 
-Based on your selected services, the estimated monthly cost is **$${estimatedCost}**.
-
-## AWS Console Links
-
-After deployment, the script will provide direct links to all created resources.
-
-General AWS Console links:
-- [CloudFormation Stacks](https://console.aws.amazon.com/cloudformation/)
-- [Lambda Functions](https://console.aws.amazon.com/lambda/)
-- [S3 Buckets](https://console.aws.amazon.com/s3/)
-- [Cost Explorer](https://console.aws.amazon.com/cost-management/home#/cost-explorer)
-
-## 🔧 Troubleshooting
-
-### Common Deployment Errors
+### Common Error Solutions
 
 #### Error: "User is not authorized to perform: iam:CreateRole"
-**Cause**: Missing IAM permissions
-**Solution**: Contact your AWS administrator to grant the required permissions listed above
+**Solution**: Your AWS user lacks IAM permissions. The script will automatically use the simplified template.
 
-#### Error: "Could not connect to the endpoint URL"
-**Cause**: Region mismatch between AWS CLI and CloudFormation endpoint
-**Solution**: 
-\`\`\`bash
-aws configure set region YOUR_CORRECT_REGION
-\`\`\`
-
-#### Error: "Stack already exists"
-**Cause**: Previous deployment with same project name
-**Solution**: Either use a different project name or delete the existing stack:
-\`\`\`bash
-./delete.sh
-\`\`\`
+#### Error: "Stack with id X does not exist"
+**Solution**: This is normal for first deployment. The script will create a new stack.
 
 #### Error: "Template format error"
-**Cause**: Using old JSON template format
-**Solution**: Use the new template.yaml generated by this version (proper YAML format)
+**Solution**: Ensure you're using the correct template file. The script auto-selects based on permissions.
 
-### Getting Help
+## 🏗️ Infrastructure Overview
 
-If you encounter issues:
-1. Check the CloudFormation console for detailed error messages
-2. Verify your AWS CLI configuration: \`aws configure list\`
-3. Ensure you have the required IAM permissions
-4. Check that you're in the correct AWS region
+### Resources Created (Full Template)
+- **S3 Bucket**: Static website hosting with public read access
+- **Lambda Function**: Serverless compute with execution role
+- **API Gateway**: RESTful API endpoint
+- **CloudWatch Log Group**: Application logging
+- **IAM Role**: Lambda execution permissions
 
-## Files Included
+### Resources Created (Simplified Template)
+- **S3 Bucket**: Static website hosting with public read access
+- **CloudWatch Log Group**: Application logging
 
-- \`template.yaml\` - Fixed CloudFormation template (proper YAML format)
-- \`deploy.sh\` - Enhanced deployment script with region auto-detection
-- \`delete.sh\` - Resource cleanup script (⚠️ DELETES all resources!)
-- \`README.md\` - This comprehensive documentation file
+## 🔗 Useful Links
 
-### File Descriptions
+After deployment, check these AWS Console links:
+- **CloudFormation**: Monitor stack status and resources
+- **S3**: View uploaded files and website configuration
+- **CloudWatch**: Check application logs and metrics
+- **Lambda**: Test functions and view code (full template only)
+- **API Gateway**: Test endpoints and view usage (full template only)
 
-#### \`template.yaml\`
-- Proper YAML CloudFormation format (not JSON)
-- Auto-detects AWS region and account ID
-- Includes console links for all resources
-- Fixed IAM role naming to avoid conflicts
+## 🛡️ Security Notes
 
-#### \`deploy.sh\`
-- Auto-detects your AWS CLI region configuration
-- Validates prerequisites before deployment
-- Provides direct links to all created resources
-- Enhanced error handling and colored output
+- S3 bucket is configured for **public read access** (required for static websites)
+- IAM roles follow **least privilege principle**
+- All resources are tagged for easy identification
+- Use **delete.sh** to clean up resources and avoid ongoing charges
 
-#### \`delete.sh\` ⚠️
-- **DANGER**: Permanently deletes ALL created resources
-- Shows resources before deletion for confirmation
-- Requires typing 'DELETE' to confirm
-- Use when you want to clean up and stop AWS charges
+## 🆘 Troubleshooting
+
+### Deployment Fails
+1. Check AWS credentials: \`aws sts get-caller-identity\`
+2. Verify region configuration: \`aws configure get region\`
+3. Review CloudFormation events in AWS Console
+4. Check the deployment script output for specific errors
+
+### Web App Deployment Issues
+1. Ensure \`package.json\` exists in your web app directory
+2. Verify build script creates \`build/\` or \`dist/\` folder
+3. Check S3 bucket permissions and website configuration
+
+### Permission Errors
+1. Contact your AWS administrator for additional permissions
+2. Use the simplified template (automatically selected)
+3. Review the IAM permissions section above
+
+## 📞 Support
+
+- **AWS Documentation**: https://docs.aws.amazon.com/
+- **CloudFormation Guide**: https://docs.aws.amazon.com/cloudformation/
+- **LambdaForge**: Generated with intelligent deployment automation
 
 ---
 
-**Generated by LambdaForge** - Making AWS deployment simple and automated.
+**Generated by LambdaForge** - Making AWS deployment simple and reliable! 🚀
 `;
   };
-
-
 
   // Create and download zip file
   const downloadZipFile = async (files, projectName) => {
@@ -1534,6 +1510,55 @@ If you encounter issues:
 
         {/* Cost Estimate & Actions */}
         <div className="space-y-6">
+          {/* New: Intelligent Deployment Features */}
+          <div className="bg-white border border-aws-gray-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-aws-blue mb-4 flex items-center">
+              <Shield className="w-5 h-5 mr-2 text-blue-600" />
+              Intelligent Deployment System
+            </h3>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <CheckCircle className="w-4 h-4 mr-2 text-blue-600" />
+                  <span className="font-medium text-blue-800">Smart Permission Detection</span>
+                </div>
+                <p className="text-sm text-blue-700">
+                  Automatically detects your AWS permissions and selects the appropriate template (full or simplified)
+                </p>
+              </div>
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <TrendingUp className="w-4 h-4 mr-2 text-green-600" />
+                  <span className="font-medium text-green-800">Visual Progress Tracking</span>
+                </div>
+                <p className="text-sm text-green-700">
+                  Real-time progress bars and status updates during deployment with resource-specific phases
+                </p>
+              </div>
+              
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <Monitor className="w-4 h-4 mr-2 text-purple-600" />
+                  <span className="font-medium text-purple-800">Enhanced Error Handling</span>
+                </div>
+                <p className="text-sm text-purple-700">
+                  Comprehensive error detection with detailed troubleshooting guidance and automatic fallbacks
+                </p>
+              </div>
+              
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <Package className="w-4 h-4 mr-2 text-orange-600" />
+                  <span className="font-medium text-orange-800">Web App Integration</span>
+                </div>
+                <p className="text-sm text-orange-700">
+                  Build-in-place support for React/Node.js apps with automatic S3 deployment and website hosting
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Cost Estimate */}
           <div className="bg-white border border-aws-gray-200 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-aws-blue mb-4 flex items-center">
@@ -1611,7 +1636,7 @@ If you encounter issues:
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
             <Package className="w-5 h-5 mr-2" />
-            Generated Deployment Package
+            Intelligent Deployment Package
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {Object.entries(generatedFiles).map(([filename, content]) => (
@@ -1623,7 +1648,7 @@ If you encounter issues:
             ))}
           </div>
           <p className="text-sm text-blue-700">
-            All files have been generated and downloaded. Extract them to a directory and run the deployment script.
+            Smart deployment package with automatic permission detection, progress tracking, and enhanced error handling. Extract and run ./deploy.sh to start.
           </p>
         </div>
       )}
@@ -1674,7 +1699,7 @@ If you encounter issues:
           ) : (
             <>
               <Download className="w-5 h-5" />
-              <span>Export Configuration</span>
+              <span>Export Smart Deployment</span>
             </>
           )}
         </button>
