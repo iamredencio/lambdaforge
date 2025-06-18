@@ -723,19 +723,62 @@ deploy_web_app() {
         --region "\$AWS_REGION" \\
         --delete
     
+    # Configure S3 public access for static website hosting
+    print_status "Configuring S3 bucket for static website hosting..."
+    
+    # Disable public access block (required for static websites)
+    aws s3api put-public-access-block \\
+        --bucket "\$S3_BUCKET" \\
+        --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" \\
+        --region "\$AWS_REGION"
+    
+    # Create bucket policy for public read access
+    cat > bucket-policy.json << EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::\$S3_BUCKET/*"
+        }
+    ]
+}
+EOF
+    
+    # Apply bucket policy
+    aws s3api put-bucket-policy \\
+        --bucket "\$S3_BUCKET" \\
+        --policy file://bucket-policy.json \\
+        --region "\$AWS_REGION"
+    
     # Configure S3 for static website hosting
     aws s3 website "s3://\$S3_BUCKET" \\
         --index-document index.html \\
-        --error-document error.html \\
+        --error-document index.html \\
         --region "\$AWS_REGION"
     
-    # Get website URL
-    WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    # Get website URL (correct format for different regions)
+    if [ "\$AWS_REGION" = "us-east-1" ]; then
+        WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    else
+        WEBSITE_URL="http://\$S3_BUCKET.s3-website.\$AWS_REGION.amazonaws.com"
+    fi
+    
+    # Clean up temporary files
+    rm -f bucket-policy.json
     
     print_success "Web application deployed successfully!"
     echo ""
     print_success "🌐 Your web application is available at:"
     echo "   \$WEBSITE_URL"
+    echo ""
+    print_status "📋 S3 Configuration Applied:"
+    echo "  • Public read access enabled"
+    echo "  • Static website hosting configured"
+    echo "  • Bucket policy applied for public access"
     echo ""
 }
 
@@ -977,14 +1020,52 @@ deploy_web_app() {
         --region "\$AWS_REGION" \\
         --delete
     
+    # Configure S3 public access for static website hosting
+    print_status "Configuring S3 bucket for static website hosting..."
+    
+    # Disable public access block (required for static websites)
+    aws s3api put-public-access-block \\
+        --bucket "\$S3_BUCKET" \\
+        --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" \\
+        --region "\$AWS_REGION"
+    
+    # Create bucket policy for public read access
+    cat > bucket-policy.json << EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::\$S3_BUCKET/*"
+        }
+    ]
+}
+EOF
+    
+    # Apply bucket policy
+    aws s3api put-bucket-policy \\
+        --bucket "\$S3_BUCKET" \\
+        --policy file://bucket-policy.json \\
+        --region "\$AWS_REGION"
+    
     # Configure S3 for static website hosting
     aws s3 website "s3://\$S3_BUCKET" \\
         --index-document index.html \\
-        --error-document error.html \\
+        --error-document index.html \\
         --region "\$AWS_REGION"
     
-    # Get website URL
-    WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    # Get website URL (correct format for different regions)
+    if [ "\$AWS_REGION" = "us-east-1" ]; then
+        WEBSITE_URL="http://\$S3_BUCKET.s3-website-\$AWS_REGION.amazonaws.com"
+    else
+        WEBSITE_URL="http://\$S3_BUCKET.s3-website.\$AWS_REGION.amazonaws.com"
+    fi
+    
+    # Clean up temporary files
+    rm -f bucket-policy.json
     
     print_success "Web application deployed successfully!"
     echo ""
@@ -1191,6 +1272,13 @@ WEB_APP_GITHUB_REPO="https://github.com/user/repo"
 #### Option 3: Infrastructure Only (Default)
 If neither path is set, only AWS infrastructure will be created.
 
+### Automatic S3 Website Configuration
+When deploying a web application, the script automatically:
+- **Disables S3 Public Access Block**: Required for static website hosting
+- **Creates Bucket Policy**: Allows public read access to website files
+- **Configures Website Hosting**: Sets index.html as the default document
+- **Generates Correct URL**: Uses proper regional endpoint format
+
 ### Example: Deploy LambdaForge Application
 \`\`\`bash
 # To deploy LambdaForge itself:
@@ -1264,10 +1352,14 @@ After deployment, check these AWS Console links:
 2. Verify build script creates \`build/\` or \`dist/\` folder
 3. Check S3 bucket permissions and website configuration
 
-### Permission Errors
-1. Contact your AWS administrator for additional permissions
-2. Use the simplified template (automatically selected)
-3. Review the IAM permissions section above
+### S3 Website Hosting Issues
+1. **DNS_PROBE_FINISHED_NXDOMAIN Error**: Check URL format
+   - ✅ **Correct**: \`bucket-name.s3-website.region.amazonaws.com\`
+   - ❌ **Wrong**: \`bucket-name.s3-website-region.amazonaws.com\`
+2. **Access Denied Error**: Bucket policy or public access block issue
+   - Run deployment script again to fix S3 configuration
+   - Check AWS Console for bucket policy and public access settings
+3. **Website Not Loading**: Verify index.html exists in bucket root
 
 ## 📞 Support
 
