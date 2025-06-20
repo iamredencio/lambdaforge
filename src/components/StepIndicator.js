@@ -29,12 +29,12 @@ const StepIndicator = ({ steps, currentStep }) => {
 
       {/* Tablet/Laptop View - Compact All Steps */}
       <div className="hidden md:block xl:hidden">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between px-2">
           {steps.map((step, index) => (
             <React.Fragment key={`tablet-${step.id}`}>
-              <div className="flex flex-col items-center flex-shrink-0 min-w-0">
+              <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '50px', maxWidth: '60px' }}>
                 <div
-                  className={`flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full transition-all duration-200 ${
+                  className={`flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full transition-all duration-200 ${
                     step.id < currentStep
                       ? 'bg-green-600 text-white shadow-sm'
                       : step.id === currentStep
@@ -43,13 +43,13 @@ const StepIndicator = ({ steps, currentStep }) => {
                   }`}
                 >
                   {step.id < currentStep ? (
-                    <Check className="w-4 h-4" />
+                    <Check className="w-3 h-3" />
                   ) : (
-                    <span>{step.id}</span>
+                    <span style={{ fontSize: '10px' }}>{step.id}</span>
                   )}
                 </div>
                 <span
-                  className={`mt-2 text-xs font-medium text-center leading-tight ${
+                  className={`mt-1 font-medium text-center leading-tight ${
                     step.id === currentStep
                       ? 'text-aws-orange'
                       : step.id < currentStep
@@ -57,20 +57,22 @@ const StepIndicator = ({ steps, currentStep }) => {
                       : 'text-aws-gray-600'
                   }`}
                   style={{ 
-                    maxWidth: '70px',
-                    fontSize: '10px',
-                    lineHeight: '1.1',
+                    fontSize: '9px',
+                    lineHeight: '1.0',
                     wordBreak: 'break-word',
-                    hyphens: 'auto'
+                    hyphens: 'auto',
+                    maxWidth: '50px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
                   }}
                 >
-                  {step.name}
+                  {step.name.length > 8 ? step.name.substring(0, 8) + '...' : step.name}
                 </span>
               </div>
               {index < steps.length - 1 && (
-                <div className="flex items-center flex-shrink-0 mx-1">
+                <div className="flex items-center flex-shrink-0" style={{ width: '8px' }}>
                   <div
-                    className={`h-0.5 w-2 transition-all duration-300 ${
+                    className={`h-0.5 w-full transition-all duration-300 ${
                       step.id < currentStep ? 'bg-green-600' : 'bg-aws-gray-300'
                     }`}
                   />
