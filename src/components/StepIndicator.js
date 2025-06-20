@@ -27,59 +27,63 @@ const StepIndicator = ({ steps, currentStep }) => {
         </div>
       </div>
 
-      {/* Tablet/Laptop View - Compact All Steps */}
+      {/* Tablet/Laptop View - Scrollable All Steps */}
       <div className="hidden md:block xl:hidden">
-        <div className="flex items-center justify-between px-2">
-          {steps.map((step, index) => (
-            <React.Fragment key={`tablet-${step.id}`}>
-              <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: '50px', maxWidth: '60px' }}>
-                <div
-                  className={`flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full transition-all duration-200 ${
-                    step.id < currentStep
-                      ? 'bg-green-600 text-white shadow-sm'
-                      : step.id === currentStep
-                      ? 'bg-aws-orange text-white shadow-sm'
-                      : 'bg-white border-2 border-aws-gray-300 text-aws-gray-600'
-                  }`}
-                >
-                  {step.id < currentStep ? (
-                    <Check className="w-3 h-3" />
-                  ) : (
-                    <span style={{ fontSize: '10px' }}>{step.id}</span>
-                  )}
-                </div>
-                <span
-                  className={`mt-1 font-medium text-center leading-tight ${
-                    step.id === currentStep
-                      ? 'text-aws-orange'
-                      : step.id < currentStep
-                      ? 'text-green-600'
-                      : 'text-aws-gray-600'
-                  }`}
-                  style={{ 
-                    fontSize: '9px',
-                    lineHeight: '1.0',
-                    wordBreak: 'break-word',
-                    hyphens: 'auto',
-                    maxWidth: '50px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}
-                >
-                  {step.name.length > 8 ? step.name.substring(0, 8) + '...' : step.name}
-                </span>
-              </div>
-              {index < steps.length - 1 && (
-                <div className="flex items-center flex-shrink-0" style={{ width: '8px' }}>
+        <div className="overflow-x-auto pb-2">
+          <div className="flex items-center justify-start space-x-3 min-w-max px-4">
+            {steps.map((step, index) => (
+              <React.Fragment key={`tablet-${step.id}`}>
+                <div className="flex flex-col items-center flex-shrink-0" style={{ width: '70px' }}>
                   <div
-                    className={`h-0.5 w-full transition-all duration-300 ${
-                      step.id < currentStep ? 'bg-green-600' : 'bg-aws-gray-300'
+                    className={`flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full transition-all duration-200 ${
+                      step.id < currentStep
+                        ? 'bg-green-600 text-white shadow-sm'
+                        : step.id === currentStep
+                        ? 'bg-aws-orange text-white shadow-sm'
+                        : 'bg-white border-2 border-aws-gray-300 text-aws-gray-600'
                     }`}
-                  />
+                  >
+                    {step.id < currentStep ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <span>{step.id}</span>
+                    )}
+                  </div>
+                  <span
+                    className={`mt-2 font-medium text-center leading-tight ${
+                      step.id === currentStep
+                        ? 'text-aws-orange'
+                        : step.id < currentStep
+                        ? 'text-green-600'
+                        : 'text-aws-gray-600'
+                    }`}
+                    style={{ 
+                      fontSize: '10px',
+                      lineHeight: '1.1',
+                      wordBreak: 'break-word',
+                      hyphens: 'auto',
+                      width: '70px'
+                    }}
+                  >
+                    {step.name}
+                  </span>
                 </div>
-              )}
-            </React.Fragment>
-          ))}
+                {index < steps.length - 1 && (
+                  <div className="flex items-center flex-shrink-0">
+                    <div
+                      className={`h-0.5 w-6 transition-all duration-300 ${
+                        step.id < currentStep ? 'bg-green-600' : 'bg-aws-gray-300'
+                      }`}
+                    />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+        {/* Scroll indicator */}
+        <div className="text-center text-xs text-aws-gray-500 mt-1">
+          ← Scroll to see all steps →
         </div>
       </div>
 
