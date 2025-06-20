@@ -15,15 +15,23 @@
   }
   
   .step-indicator.active {
-    @apply bg-aws-orange text-white;
+    @apply bg-aws-orange text-white shadow-lg;
   }
   
   .step-indicator.completed {
-    @apply bg-green-600 text-white;
+    @apply bg-green-600 text-white shadow-lg;
   }
   
   .step-indicator.inactive {
-    @apply bg-aws-gray-300 text-aws-gray-600;
+    @apply bg-white border-2 border-aws-gray-300 text-aws-gray-600 shadow-sm;
+  }
+  
+  .shadow-green-200 {
+    box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.1), 0 2px 4px -1px rgba(34, 197, 94, 0.06);
+  }
+  
+  .shadow-orange-200 {
+    box-shadow: 0 4px 6px -1px rgba(255, 165, 0, 0.1), 0 2px 4px -1px rgba(255, 165, 0, 0.06);
   }
   
   .form-input {
