@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 const StepIndicator = ({ steps, currentStep }) => {
   return (
     <div className="bg-white border border-aws-gray-200 rounded-lg shadow-card p-3 sm:p-4 mb-6">
-      {/* Mobile View - Compact Progress Bar */}
+      {/* Mobile View - Progress Bar */}
       <div className="block md:hidden">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-aws-gray-700">
@@ -27,11 +27,11 @@ const StepIndicator = ({ steps, currentStep }) => {
         </div>
       </div>
 
-      {/* Desktop/Tablet View - Compact All Steps */}
-      <div className="hidden md:block">
-        <div className="flex items-center justify-between overflow-x-auto">
+      {/* Tablet/Laptop View - Compact All Steps */}
+      <div className="hidden md:block xl:hidden">
+        <div className="flex items-center justify-between">
           {steps.map((step, index) => (
-            <React.Fragment key={step.id}>
+            <React.Fragment key={`tablet-${step.id}`}>
               <div className="flex flex-col items-center flex-shrink-0 min-w-0">
                 <div
                   className={`flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full transition-all duration-200 ${
@@ -58,8 +58,8 @@ const StepIndicator = ({ steps, currentStep }) => {
                   }`}
                   style={{ 
                     maxWidth: '70px',
-                    fontSize: '11px',
-                    lineHeight: '1.2',
+                    fontSize: '10px',
+                    lineHeight: '1.1',
                     wordBreak: 'break-word',
                     hyphens: 'auto'
                   }}
@@ -70,7 +70,7 @@ const StepIndicator = ({ steps, currentStep }) => {
               {index < steps.length - 1 && (
                 <div className="flex items-center flex-shrink-0 mx-1">
                   <div
-                    className={`h-0.5 w-3 transition-all duration-300 ${
+                    className={`h-0.5 w-2 transition-all duration-300 ${
                       step.id < currentStep ? 'bg-green-600' : 'bg-aws-gray-300'
                     }`}
                   />
@@ -85,7 +85,7 @@ const StepIndicator = ({ steps, currentStep }) => {
       <div className="hidden xl:block">
         <div className="flex items-center justify-center">
           {steps.map((step, index) => (
-            <React.Fragment key={step.id}>
+            <React.Fragment key={`desktop-${step.id}`}>
               <div className="flex flex-col items-center flex-shrink-0">
                 <div
                   className={`flex items-center justify-center w-10 h-10 text-sm font-bold rounded-full transition-all duration-200 shadow-sm ${
